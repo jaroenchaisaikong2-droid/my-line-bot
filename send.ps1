@@ -20,6 +20,32 @@ $messageArray = @(
     @{
         type = "text"
         text = $textMsg
+    },
+    # ชิ้นที่ 3: สติกเกอร์ (Sticker)
+    @{
+        type = "sticker"
+        packageId = "446"
+        stickerId = "1988" 
+    },
+    # ชิ้นที่ 4: พิกัดแผนที่ (Location)
+    @{
+        type = "location"
+        title = "สำนักงาน กฟภ. (PEA)"
+        address = "ระบุที่อยู่ของสาขาลงไปตรงนี้ได้เลยครับ"
+        latitude = 13.8441   # ละติจูด
+        longitude = 100.5543 # ลองจิจูด
+    },
+    # ชิ้นที่ 5: วิดีโอ (Video)
+    @{
+        type = "video"
+        originalContentUrl = "https://www.example.com/my-video.mp4" # ลิงก์ไฟล์วิดีโอตัวเต็ม
+        previewImageUrl = "https://www.example.com/cover.jpg"      # ลิงก์รูปหน้าปกวิดีโอ
+    },
+    # ตัวเลือกเสริม: ไฟล์เสียง (Audio)
+    @{
+        type = "audio"
+        originalContentUrl = "https://www.example.com/sound.m4a"
+        duration = 60000 # ความยาวเสียง (มิลลิวินาที) เช่น 60000 = 1 นาที
     }
 )
 
