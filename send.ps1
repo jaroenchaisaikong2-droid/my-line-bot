@@ -17,8 +17,50 @@ $messageArray = @(
     @{
         type = "text"
         text = $textMsg
+    },
+    @{
+    type = "template"
+    altText = "ข้อความนี้มีปุ่มกด (สำหรับแสดงในแจ้งเตือน)"
+    template = @{
+        type = "buttons"
+        thumbnailImageUrl = "https://example.com/cover.jpg"
+        imageAspectRatio = "rectangle"
+        imageSize = "cover"
+        imageBackgroundColor = "#FFFFFF"
+        title = "เมนูหลัก"
+        text = "กรุณาเลือกรายการที่ต้องการ"
+        actions = @(
+            @{
+                type = "uri"
+                label = "คลิกเพื่อดูเอกสาร"
+                uri = "https://www.youtube.com/watch?v=xVSl0UdF70I"
+            }
+        )
+    },
+    @{
+        type = "template"
+        altText = "ข้อความแบบการ์ดเลื่อน"
+        template = @{
+            type = "carousel"
+            columns = @(
+                @{
+                    thumbnailImageUrl = "https://example.com/img1.jpg"
+                    title = "งานที่ 1"
+                    text = "รายละเอียดงานที่ 1"
+                    actions = @( @{ type = "uri"; label = "ดูรายละเอียด"; uri = "https://www.google.com" } )
+                },
+                @{
+                    thumbnailImageUrl = "https://example.com/img2.jpg"
+                    title = "งานที่ 2"
+                    text = "รายละเอียดงานที่ 2"
+                    actions = @( @{ type = "uri"; label = "ดูรายละเอียด"; uri = "https://www.google.com" } )
+                }
+            )
+        }
     }
-)
+    }
+    
+    )
 
 # วนลูปส่งไปที่ทุกกลุ่ม
 foreach ($id in $groupIds) {
