@@ -7,10 +7,11 @@ jobs:
   send:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
-      - shell: powershell
+      - uses: actions/checkout@v4
+      - name: Run send script
+        shell: powershell
         run: ./send.ps1
         env:
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
-          LINE_GROUP_ID: ${{ secrets.LINE_GROUP_ID_TEST }}
+          LINE_GROUP_ID: ${{ secrets.LINE_GROUP_ID }}
           MESSAGE_TEXT: ${{ secrets.MESSAGE_TEXT }}
