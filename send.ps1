@@ -40,12 +40,6 @@ $messageArray = @(
         type = "video"
         originalContentUrl = "https://www.example.com/my-video.mp4" # ลิงก์ไฟล์วิดีโอตัวเต็ม
         previewImageUrl = "https://www.example.com/cover.jpg"      # ลิงก์รูปหน้าปกวิดีโอ
-    },
-    # ตัวเลือกเสริม: ไฟล์เสียง (Audio)
-    @{
-        type = "audio"
-        originalContentUrl = "https://www.example.com/sound.m4a"
-        duration = 60000 # ความยาวเสียง (มิลลิวินาที) เช่น 60000 = 1 นาที
     }
 )
 
