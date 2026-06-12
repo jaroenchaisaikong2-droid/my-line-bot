@@ -1,0 +1,15 @@
+name: Line Daily Sender
+on:
+  schedule:
+    - cron: '0 2 * * *' # ส่งเวลา 09:00 น. ตามเวลาไทย
+  workflow_dispatch: # ทำให้เรากดปุ่ม "รันด้วยมือ" ได้
+jobs:
+  send:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - shell: powershell
+        run: ./send.ps1
+        env:
+          LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
+          LINE_GROUP_ID: ${{ secrets.LINE_GROUP_ID_TEST }}
