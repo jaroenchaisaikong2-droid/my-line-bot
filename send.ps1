@@ -1,13 +1,7 @@
-# บรรทัดนี้สำคัญที่สุดสำหรับภาษาไทย
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-
 $token = $env:LINE_TOKEN
-$groupId = $env:LINE_GROUP_ID  # แก้ให้เป็น LINE_GROUP_ID ตรงกับที่ตั้งใน Secret
-$msg = $env:MESSAGE_TEXT
-
-# เพิ่มบรรทัดเช็คค่า เพื่อให้รู้ว่าตัวไหนที่มันหาไม่เจอ
-if ([string]::IsNullOrEmpty($token)) { Write-Error "LINE_TOKEN หายไป!" }
-if ([string]::IsNullOrEmpty($groupId)) { Write-Error "LINE_GROUP_ID หายไป!" }
+$groupId = $env:LINE_GROUP_ID
+# การใช้ [System.Text.Encoding]::UTF8.GetString ช่วยแก้ปัญหาตัวแปรจาก Secret ได้ครับ
+$msg = [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::Default.GetBytes($env:MESSAGE_TEXT))
 
 $body = @{
     to = $groupId
