@@ -1,3 +1,6 @@
+# บรรทัดนี้สำคัญที่สุดสำหรับภาษาไทย
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
 $token = $env:LINE_TOKEN
 $groupId = $env:LINE_GROUP_ID  # แก้ให้เป็น LINE_GROUP_ID ตรงกับที่ตั้งใน Secret
 $msg = $env:MESSAGE_TEXT
