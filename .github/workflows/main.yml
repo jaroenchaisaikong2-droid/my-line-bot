@@ -10,7 +10,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run send script
         shell: powershell
-        run: ./send.ps1
+        run: |
+          chcp 65001
+          ./send.ps1
         env:
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
           LINE_GROUP_ID: ${{ secrets.LINE_GROUP_ID }}
