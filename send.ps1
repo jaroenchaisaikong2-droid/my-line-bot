@@ -1,8 +1,8 @@
 $token = $env:LINE_TOKEN
 $groupId = $env:LINE_GROUP_ID
 
-# สั่งให้ PowerShell ไปอ่านข้อความจากไฟล์ .txt โดยบังคับเป็น UTF-8
-$msg = Get-Content -Path "./message.txt" -Encoding UTF8
+# อ่านไฟล์ และใช้ .Trim() เพื่อลบช่องว่างหรือบรรทัดใหม่ที่เกินมาที่ต้นและท้ายข้อความออก
+$msg = (Get-Content -Path "./message.txt" -Encoding UTF8).Trim()
 
 $body = @{
     to = $groupId
