@@ -10,11 +10,6 @@ $imageUrl = "https://cdn.pixabay.com/photo/2023/04/13/17/49/sunrise-7923120_1280
 # 3. จัดกลุ่มข้อมูล (รูป + ข้อความ)
 $messageArray = @(
     @{
-        type = "image"
-        originalContentUrl = $imageUrl
-        previewImageUrl = $imageUrl
-    },
-    @{
         type = "text"
         text = $textMsg
     },
@@ -36,6 +31,7 @@ $messageArray = @(
                 uri = "https://www.youtube.com/watch?v=xVSl0UdF70I"
             }
         )
+    }
     },
     @{
         type = "template"
@@ -57,7 +53,6 @@ $messageArray = @(
                 }
             )
         }
-    }
     }
     
     )
