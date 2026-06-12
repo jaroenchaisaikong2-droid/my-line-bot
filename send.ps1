@@ -1,7 +1,8 @@
 $token = $env:LINE_TOKEN
 $groupId = $env:LINE_GROUP_ID
-# การใช้ [System.Text.Encoding]::UTF8.GetString ช่วยแก้ปัญหาตัวแปรจาก Secret ได้ครับ
-$msg = [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::Default.GetBytes($env:MESSAGE_TEXT))
+
+# สั่งให้ PowerShell ไปอ่านข้อความจากไฟล์ .txt โดยบังคับเป็น UTF-8
+$msg = Get-Content -Path "./message.txt" -Encoding UTF8
 
 $body = @{
     to = $groupId
