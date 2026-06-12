@@ -1,10 +1,6 @@
-# บังคับให้ PowerShell อ่านและเขียนเป็น UTF-8
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-
 $token = $env:LINE_TOKEN
 $groupId = $env:LINE_GROUP_ID_TEST
-# ตอนนี้คุณสามารถใส่ภาษาไทยได้แล้ว
-$msg = "รายงานประจำวัน: ลิงก์งานวันนี้พร้อมแล้วครับ https://www.google.com"
+$msg = $env:MESSAGE_TEXT
 
 $body = @{
     to = $groupId
