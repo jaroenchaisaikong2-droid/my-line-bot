@@ -1,19 +1,16 @@
 name: Line Daily Sender
 on:
   schedule:
-    - cron: '0 2 * * *' # ส่งเวลา 09:00 น. ตามเวลาไทย
-  workflow_dispatch: # ทำให้เรากดปุ่ม "รันด้วยมือ" ได้
+    - cron: '0 2 * * *'
+  workflow_dispatch:
 jobs:
   send:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest # เปลี่ยนมารันบนเครื่อง Linux แทน
     steps:
       - uses: actions/checkout@v4
       - name: Run send script
-        shell: powershell
-        run: |
-          chcp 65001
-          ./send.ps1
+        shell: pwsh # ใช้ PowerShell เวอร์ชันใหม่ (Core)
+        run: ./send.ps1
         env:
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
           LINE_GROUP_ID: ${{ secrets.LINE_GROUP_ID }}
-          MESSAGE_TEXT: ${{ secrets.MESSAGE_TEXT }}
