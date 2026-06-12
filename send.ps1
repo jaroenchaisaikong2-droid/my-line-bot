@@ -2,7 +2,7 @@
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $token = $env:LINE_TOKEN
-$groupId = $env:LINE_GROUP_ID
+$groupId = $env:LINE_GROUP_ID_TEST
 # ตอนนี้คุณสามารถใส่ภาษาไทยได้แล้ว
 $msg = "รายงานประจำวัน: ลิงก์งานวันนี้พร้อมแล้วครับ https://www.google.com"
 
