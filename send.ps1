@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันมหาเทพ: ดูดปกอัตโนมัติ + ป้ายกำกับลอยทับรูป)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชันล้างไพ่: สมบูรณ์ที่สุด ห้ามมีโค้ดอื่นปน)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -35,7 +35,7 @@ foreach ($task in $tasks) {
             $p3 = if ($task.Param3) { $task.Param3 } else { $task.'ลิงก์รูปภาพ' }
             $p4 = if ($task.Param4) { $task.Param4 } else { $task.'ลิงก์ URL' }
             $p5 = if ($task.Param5) { $task.Param5 } else { "DefaultGroup" }
-            $p6 = if ($task.Param6) { $task.Param6 } else { "" } # [เพิ่มใหม่] รับค่าป้ายกำกับ
+            $p6 = if ($task.Param6) { $task.Param6 } else { "" } 
 
             if ($type -eq "text") {
                 if ($textMessages.ContainsKey($rawSendAt)) { $textMessages[$rawSendAt] += "`n" + $p1 }
@@ -50,7 +50,6 @@ foreach ($task in $tasks) {
                 $descText = if ([string]::IsNullOrWhiteSpace($p2)) { "-" } else { $p2 }
                 $uriLink = if ($p4 -match "^https?://") { $p4 } else { "https://line.me" }
                 
-                # โครงสร้างตัวการ์ดพื้นฐาน
                 $bubble = @{
                     type = "bubble"
                     body = @{
@@ -95,7 +94,6 @@ foreach ($task in $tasks) {
                     }
                 }
                 
-                # --- ระบบดูดรูปภาพอัตโนมัติ ---
                 $finalThumbUrl = $null
                 if ($p3 -match "^https?://") { $finalThumbUrl = $p3 }
                 elseif ($p4 -match "youtu\.be/([^?]+)|youtube\.com/watch\?v=([^&]+)") {
@@ -111,9 +109,7 @@ foreach ($task in $tasks) {
                     } catch {}
                 }
                 
-                # [อัปเกรดจุดสร้างป้ายกำกับลอยทับรูป]
                 if ($null -ne $finalThumbUrl) {
-                    # สร้างกล่องภาพขนาดเต็ม
                     $heroBox = @{
                         type = "box"
                         layout = "vertical"
@@ -128,29 +124,27 @@ foreach ($task in $tasks) {
                         )
                     }
                     
-                    # ถ้าในสเปรดชีตมีการพิมพ์ป้ายกำกับ (Param6) ให้เสกป้ายลอยขึ้นมาทับรูปภาพ
                     if (-not [string]::IsNullOrWhiteSpace($p6)) {
                         $heroBox["contents"] += @{
                             type = "box"
                             layout = "vertical"
                             position = "absolute"
-                            backgroundColor = "#FF9800" # 🎨 สีพื้นหลังป้ายกำกับ (ปัจจุบัน: สีส้มสดใส)
+                            backgroundColor = "#FF9800" 
                             cornerRadius = "md"
                             paddingAll = "sm"
-                            offsetTop = "10px"      # ระยะห่างจากขอบบนรูป
-                            offsetLeft = "10px"     # ระยะห่างจากขอบซ้ายรูป
+                            offsetTop = "10px"
+                            offsetLeft = "10px"
                             contents = @(
                                 @{
                                     type = "text"
                                     text = $p6
-                                    color = "#FFFFFF" # 🎨 สีตัวอักษรบนป้าย (สีขาว)
+                                    color = "#FFFFFF"
                                     size = "xs"
                                     weight = "bold"
                                 }
                             )
                         }
                     }
-                    
                     $bubble["hero"] = $heroBox
                 }
 
