@@ -1,7 +1,9 @@
 $token = $env:LINE_TOKEN
 $groupIds = $env:LINE_GROUP_ID -split ","
 
-# 1. เพิ่ม -Raw เข้าไปตรงนี้ เพื่อให้รองรับข้อความแบบหลายบรรทัด
+
+# เปลี่ยนตรงนี้: ให้รับชื่อไฟล์มาจาก GitHub Workflow (ถ้าไม่มีสั่งมา ให้ใช้ message_morning.txt เป็นค่าเริ่มต้น)
+$fileName = if ($env:FILE_NAME) { $env:FILE_NAME } else { "message_morning.txt" }
 $textMsg = (Get-Content -Path "./message.txt" -Raw).Trim()
 
 # 2. ลิงก์รูปภาพ (แก้ลิงก์เป็นรูปที่คุณต้องการได้เลย)
