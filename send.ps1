@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Failsafe: กลับสู่ Template เสถียร 100%)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Ultimate Flex: คืนชีพสีสัน ตัวหนา และป้ายกำกับ)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -46,26 +46,81 @@ foreach ($task in $tasks) {
             }
             elseif ($type -eq "carousel") {
                 
-                # [ลูกเล่นป้ายกำกับ] นำ Param6 มาประกอบร่างเป็นป้ายนำหน้า
                 $titleText = if ([string]::IsNullOrWhiteSpace($p1)) { "-" } else { $p1 }
-                if (-not [string]::IsNullOrWhiteSpace($p6)) {
-                    $titleText = "🔥 [$p6] " + $titleText
-                }
-                
                 $descText = if ([string]::IsNullOrWhiteSpace($p2)) { "-" } else { $p2 }
                 $uriLink = if ($p4 -match "^https?://") { $p4 } else { "https://line.me" }
                 
-                # ป้องกัน Error กรณีข้อความยาวเกินไป (LINE จำกัดหัวข้อ 40 ตัวอักษร, รายละเอียด 60 ตัวอักษร)
-                if ($titleText.Length -gt 40) { $titleText = $titleText.Substring(0, 37) + "..." }
-                if ($descText.Length -gt 60) { $descText = $descText.Substring(0, 57) + "..." }
+                # --- [สร้างเนื้อหาภายในการ์ดแบบ Flex] ---
+                $bodyContents = @()
                 
-                $col = @{
-                    title = $titleText
-                    text = $descText
-                    actions = @(@{ type = "uri"; label = "ดูรายละเอียด"; uri = $uriLink })
+                # 1. ส่วนป้ายกำกับ (Badge) ถ้ามีการระบุใน Param6 จะสร้างกล่องสีส้มขึ้นมาโชว์ด้านบนสุด
+                if (-not [string]::IsNullOrWhiteSpace($p6)) {
+                    $bodyContents += @{
+                        type = "box"
+                        layout = "inline"
+                        contents = @(
+                            @{
+                                type = "text"
+                                text = " $p6 "
+                                color = "#FFFFFF"
+                                size = "xs"
+                                weight = "bold"
+                                backgroundColor = "#FF9800" # 🎨 สีพื้นหลังป้ายกำกับ (เปลี่ยนสีกระตุ้นความสนใจได้)
+                                align = "center"
+                            }
+                        )
+                    }
                 }
                 
-                # --- ระบบดูดรูปภาพปก Ebook และ YouTube อัตโนมัติ ---
+                # 2. ส่วนหัวข้อ (Title) ตั้งค่าตัวหนา และใส่สีสัน
+                $bodyContents += @{
+                    type = "text"
+                    text = $titleText
+                    weight = "bold"
+                    size = "xl"
+                    color = "#E53935" # 🎨 สีตัวอักษรหัวข้อ (ปัจจุบัน: สีแดงเด่นชัด)
+                    wrap = $true
+                    margin = "md"
+                }
+                
+                # 3. ส่วนรายละเอียด (Description) ตัวหนาตามใจสั่ง
+                $bodyContents += @{
+                    type = "text"
+                    text = $descText
+                    weight = "bold" # 🌟 ตั้งค่าเป็นตัวหนาเรียบร้อยครับ
+                    size = "sm"
+                    color = "#555555"
+                    wrap = $true
+                    margin = "sm"
+                }
+                
+                # ประกอบโครงสร้าง Bubble การ์ด
+                $bubble = @{
+                    type = "bubble"
+                    body = @{
+                        type = "box"
+                        layout = "vertical"
+                        contents = $bodyContents
+                    }
+                    footer = @{
+                        type = "box"
+                        layout = "vertical"
+                        contents = @(
+                            @{
+                                type = "button"
+                                style = "primary"
+                                color = "#1E88E5" # 🎨 สีปุ่มกด (ปัจจุบัน: สีน้ำเงินพรีเมียม)
+                                action = @{
+                                    type = "uri"
+                                    label = "ดูรายละเอียด"
+                                    uri = $uriLink
+                                }
+                            }
+                        )
+                    }
+                }
+                
+                # --- ระบบดูดรูปภาพปกอัตโนมัติ (YouTube / Heyzine / FlipHTML5) ---
                 $finalThumbUrl = $null
                 if ($p3 -match "^https?://") { $finalThumbUrl = $p3 }
                 elseif ($p4 -match "youtu\.be/([^?]+)|youtube\.com/watch\?v=([^&]+)") {
@@ -82,14 +137,20 @@ foreach ($task in $tasks) {
                 }
                 
                 if ($null -ne $finalThumbUrl) {
-                    $col["thumbnailImageUrl"] = $finalThumbUrl
+                    $bubble["hero"] = @{
+                        type = "image"
+                        url = $finalThumbUrl
+                        size = "full"
+                        aspectRatio = "20:13"
+                        aspectMode = "cover"
+                    }
                 }
 
                 $groupKey = "${rawSendAt}_${p5}"
                 if (-not $carouselGroups.ContainsKey($groupKey)) {
                     $carouselGroups[$groupKey] = @()
                 }
-                $carouselGroups[$groupKey] += $col
+                $carouselGroups[$groupKey] += $bubble
             }
         }
     } catch {}
@@ -116,13 +177,12 @@ foreach ($gKey in $carouselGroups.Keys) {
         $finalMessages += @{ type = "text"; text = "📌 $groupName" }
     }
     
-    # กลับมาใช้ Template Message ที่เสถียรที่สุด
     $finalMessages += @{ 
-        type = "template"
+        type = "flex"
         altText = "คุณได้รับข้อความกลุ่ม $groupName"
-        template = @{ 
+        contents = @{ 
             type = "carousel"
-            columns = $cols 
+            contents = $cols 
         } 
     }
 }
