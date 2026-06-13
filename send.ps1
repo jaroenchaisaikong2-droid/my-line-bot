@@ -235,4 +235,20 @@ if ($finalMessages.Count -gt 0) {
         $body = @{ to = $id.Trim(); messages = [array]$finalMessages } | ConvertTo-Json -Depth 15
         Invoke-RestMethod -Uri "https://api.line.me/v2/bot/message/push" -Method Post -Headers @{ "Authorization" = "Bearer $token"; "Content-Type" = "application/json" } -Body $body
     }
+
+    # =======================================================
+# (โค้ดด้านบนคือโค้ด Flex Message มหาเทพตัวเดิม ปล่อยไว้เหมือนเดิมครับ)
+# =======================================================
+
+# ส่งไปยัง LINE
+if ($finalMessages.Count -gt 0) {
+    foreach ($id in $groupIds) {
+        $body = @{ to = $id.Trim(); messages = [array]$finalMessages } | ConvertTo-Json -Depth 15
+        Invoke-RestMethod -Uri "https://api.line.me/v2/bot/message/push" -Method Post -Headers @{ "Authorization" = "Bearer $token"; "Content-Type" = "application/json" } -Body $body
+    }
+    
+    # --- [เพิ่มใหม่] สั่งให้ Google Sheets ย้ายข้อมูลหลังจากส่ง LINE เสร็จ ---
+    Write-Host "กำลังส่งสัญญาณบอกให้ Google Sheets ทำความสะอาดตาราง..."
+    Invoke-RestMethod -Uri "วาง_ลิงก์_WEB_APP_ยาวๆ_ที่คุณก๊อปปี้มา_ใส่ตรงนี้" -Method Get
+}
 }
