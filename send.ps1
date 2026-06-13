@@ -243,5 +243,5 @@ if ($finalMessages.Count -gt 0) {
     
     # สั่งให้ Google Sheets ย้ายข้อมูลหลังจากส่ง LINE เสร็จ (ต้องคงลิงก์เดิมของคุณเอาไว้นะครับ)
     Write-Host "กำลังส่งสัญญาณบอกให้ Google Sheets ทำความสะอาดตาราง..."
-    Invoke-RestMethod -Uri "วาง_ลิงก์_WEB_APP_ยาวๆ_ของคุณตรงนี้" -Method Get
+    Invoke-RestMethod -Uri "https://script.google.com/macros/s/AKfycbwrT3rG_XWM97-tRbvfAQYn4vky61MKNPkbw3OHXOkBl45978KiEIUBgkmKi6rMFadHlg/exec" -Method Get
 }
