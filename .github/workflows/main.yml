@@ -47,3 +47,4 @@ jobs:
         env:
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}       # รหัสบอทส่งข้อความ (Channel Access Token)
           LINE_GROUP_ID: ${{ secrets.LINE_GROUP_ID }} # รหัสกลุ่มไลน์ (รองรับการใส่หลายกลุ่มโดยคั่นด้วยเครื่องหมายลูกน้ำ ,)
+          GOOGLE_SHEET_API_URL: ${{ secrets.GOOGLE_SHEET_API_URL }} # เพิ่มบรรทัดนี้เข้าไป
