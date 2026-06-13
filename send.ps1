@@ -1,79 +1,53 @@
 $token = $env:LINE_TOKEN
 $groupIds = $env:LINE_GROUP_ID -split ","
 
+# 1. ดึงเวลาปัจจุบันในโซนเวลาประเทศไทย (GMT+7)
+$taiTime = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([System.DateTime]::Now, "SE Asia Standard Time")
+$currentDateStr = $taiTime.ToString("dd/MM/yyyy", [System.Globalization.CultureInfo]::InvariantCulture)
+$currentTimeStr = $taiTime.ToString("HH:mm") 
 
-# เปลี่ยนตรงนี้: ให้รับชื่อไฟล์มาจาก GitHub Workflow (ถ้าไม่มีสั่งมา ให้ใช้ message_morning.txt เป็นค่าเริ่มต้น)
-$fileName = if ($env:FILE_NAME) { $env:FILE_NAME } else { "message_morning.txt" }
-$textMsg = (Get-Content -Path "./message.txt" -Raw).Trim()
+$currentCheckStr = "${currentDateStr}@${currentTimeStr}"
+Write-Host "เวลาปัจจุบันของไทย: $currentCheckStr"
 
-# 2. ลิงก์รูปภาพ (แก้ลิงก์เป็นรูปที่คุณต้องการได้เลย)
-$imageUrl = "https://cdn.pixabay.com/photo/2023/04/13/17/49/sunrise-7923120_1280.jpg"
+# 2. อ่านและแปลงไฟล์ตารางงาน JSON
+$jsonContent = Get-Content -Path "./schedule_tasks.json" -Raw
+$tasks = ConvertFrom-Json $jsonContent
 
-# 3. จัดกลุ่มข้อมูล (รูป + ข้อความ)
-$messageArray = @(
-    @{
-        type = "text"
-        text = $textMsg
-    },
-    @{
-    type = "template"
-    altText = "ข้อความนี้มีปุ่มกด (สำหรับแสดงในแจ้งเตือน)"
-    template = @{
-        type = "buttons"
-        thumbnailImageUrl = "https://example.com/cover.jpg"
-        imageAspectRatio = "rectangle"
-        imageSize = "cover"
-        imageBackgroundColor = "#FFFFFF"
-        title = "เมนูหลัก"
-        text = "กรุณาเลือกรายการที่ต้องการ"
-        actions = @(
-            @{
-                type = "uri"
-                label = "คลิกเพื่อดูเอกสาร"
-                uri = "https://www.youtube.com/watch?v=xVSl0UdF70I"
-            }
-        )
+$matchedMessages = $null
+
+# ค้นหางานที่ตรงกับวันและเวลาปัจจุบัน
+foreach ($task in $tasks) {
+    if ($task.sendAt -eq $currentCheckStr) {
+        $matchedMessages = $task.messages
+        break
     }
-    },
-    @{
-        type = "template"
-        altText = "ข้อความแบบการ์ดเลื่อน"
-        template = @{
-            type = "carousel"
-            columns = @(
-                @{
-                    thumbnailImageUrl = "https://example.com/img1.jpg"
-                    title = "งานที่ 1"
-                    text = "รายละเอียดงานที่ 1"
-                    actions = @( @{ type = "uri"; label = "ดูรายละเอียด"; uri = "https://www.google.com" } )
-                },
-                @{
-                    thumbnailImageUrl = "https://example.com/img2.jpg"
-                    title = "งานที่ 2"
-                    text = "รายละเอียดงานที่ 2"
-                    actions = @( @{ type = "uri"; label = "ดูรายละเอียด"; uri = "https://www.google.com" } )
-                }
-            )
+}
+
+# 3. ถ้าเจอคิวงานที่ตรงเป๊ะ ให้ส่งข้อมูลทั้งหมดเข้ากลุ่ม LINE
+if ($matchedMessages) {
+    Write-Host "เจอคิวงานตรงกัน! กำลังจัดส่ง..."
+
+    foreach ($id in $groupIds) {
+        $id = $id.Trim()
+        if (-not [string]::IsNullOrEmpty($id)) {
+            
+            # โครงสร้างส่งหา LINE API
+            $bodyObj = @{
+                to = $id
+                messages = $matchedMessages
+            }
+            
+            # แปลงเป็น JSON string แบบรองรับอักขระพิเศษภาษาไทย
+            $bodyJson = [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::Default.GetBytes((ConvertTo-Json $bodyObj -Depth 20 -Compress)))
+
+            Invoke-RestMethod -Uri "https://api.line.me/v2/bot/message/push" `
+                              -Method Post `
+                              -Headers @{ "Authorization" = "Bearer $token"; "Content-Type" = "application/json; charset=utf-8" } `
+                              -Body $bodyJson
+                              
+            Write-Host "ส่งข้อความคอมโบไปกลุ่ม $id สำเร็จแล้ว"
         }
     }
-    
-    )
-
-# วนลูปส่งไปที่ทุกกลุ่ม
-foreach ($id in $groupIds) {
-    $id = $id.Trim()
-    
-    if (-not [string]::IsNullOrEmpty($id)) {
-        $body = @{
-            to = $id
-            messages = $messageArray
-        } | ConvertTo-Json -Depth 10 -Compress
-
-        Invoke-RestMethod -Uri "https://api.line.me/v2/bot/message/push" `
-                          -Method Post `
-                          -Headers @{ "Authorization" = "Bearer $token"; "Content-Type" = "application/json; charset=utf-8" } `
-                          -Body $body
-                          
-        Write-Host "ส่งข้อมูลคอมโบไปยังกลุ่ม: $id สำเร็จ"
-    }
+} else {
+    Write-Host "รอบนี้ไม่มีคิวงานที่ตรงกับเวลานี้"
 }
