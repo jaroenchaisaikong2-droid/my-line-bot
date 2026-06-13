@@ -1,16 +1,23 @@
 name: Line Daily Sender
+
 on:
   schedule:
-    - cron: '0 2 * * *'
-  workflow_dispatch:
+    # ตั้งเวลาให้บอทตื่นมาเช็คไฟล์ JSON ทุกๆ นาทีที่ 0 และ 30 ของทุกชั่วโมง (เวลาสากล)
+    - cron: '0,30 * * * *'
+  workflow_dispatch: # ปุ่มกดส่งเองด้วยมือ (Manual)
+
 jobs:
   send:
-    runs-on: ubuntu-latest # เปลี่ยนมารันบนเครื่อง Linux แทน
+    runs-on: ubuntu-latest # ใช้เครื่อง Linux ตามที่คุณระบุ
     steps:
       - uses: actions/checkout@v4
+      
       - name: Run send script
-        shell: pwsh # ใช้ PowerShell เวอร์ชันใหม่ (Core)
-        run: ./send.ps1
+        shell: pwsh # ใช้ PowerShell Core บน Linux ตามที่คุณระบุ
+        run: |
+          # บังคับเพิ่มสิทธิ์ให้เครื่อง Linux สามารถสั่งรันไฟล์สคริปต์ได้ ป้องกันปัญหา Permission Denied
+          chmod +x ./send.ps1
+          ./send.ps1
         env:
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
           LINE_GROUP_ID: ${{ secrets.LINE_GROUP_ID }}
