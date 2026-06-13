@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันล้างไพ่ 100% + ป้องกันบั๊ก PowerShell)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Failsafe: กลับสู่ Template เสถียร 100%)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -46,55 +46,26 @@ foreach ($task in $tasks) {
             }
             elseif ($type -eq "carousel") {
                 
+                # [ลูกเล่นป้ายกำกับ] นำ Param6 มาประกอบร่างเป็นป้ายนำหน้า
                 $titleText = if ([string]::IsNullOrWhiteSpace($p1)) { "-" } else { $p1 }
+                if (-not [string]::IsNullOrWhiteSpace($p6)) {
+                    $titleText = "🔥 [$p6] " + $titleText
+                }
+                
                 $descText = if ([string]::IsNullOrWhiteSpace($p2)) { "-" } else { $p2 }
                 $uriLink = if ($p4 -match "^https?://") { $p4 } else { "https://line.me" }
                 
-                $bubble = @{
-                    type = "bubble"
-                    body = @{
-                        type = "box"
-                        layout = "vertical"
-                        contents = [array]@(
-                            @{
-                                type = "text"
-                                text = $titleText
-                                weight = "bold"
-                                size = "xl"
-                                color = "#E53935"
-                                wrap = $true
-                            },
-                            @{
-                                type = "text"
-                                text = $descText
-                                weight = "bold"
-                                size = "sm"
-                                color = "#666666"
-                                wrap = $true
-                                margin = "md"
-                            }
-                        )
-                    }
-                    footer = @{
-                        type = "box"
-                        layout = "vertical"
-                        spacing = "sm"
-                        contents = [array]@(
-                            @{
-                                type = "button"
-                                style = "primary"
-                                color = "#1E88E5"
-                                action = @{
-                                    type = "uri"
-                                    label = "ดูรายละเอียด"
-                                    uri = $uriLink
-                                }
-                            }
-                        )
-                    }
+                # ป้องกัน Error กรณีข้อความยาวเกินไป (LINE จำกัดหัวข้อ 40 ตัวอักษร, รายละเอียด 60 ตัวอักษร)
+                if ($titleText.Length -gt 40) { $titleText = $titleText.Substring(0, 37) + "..." }
+                if ($descText.Length -gt 60) { $descText = $descText.Substring(0, 57) + "..." }
+                
+                $col = @{
+                    title = $titleText
+                    text = $descText
+                    actions = @(@{ type = "uri"; label = "ดูรายละเอียด"; uri = $uriLink })
                 }
                 
-                # --- ระบบดูดรูปภาพ ---
+                # --- ระบบดูดรูปภาพปก Ebook และ YouTube อัตโนมัติ ---
                 $finalThumbUrl = $null
                 if ($p3 -match "^https?://") { $finalThumbUrl = $p3 }
                 elseif ($p4 -match "youtu\.be/([^?]+)|youtube\.com/watch\?v=([^&]+)") {
@@ -111,68 +82,29 @@ foreach ($task in $tasks) {
                 }
                 
                 if ($null -ne $finalThumbUrl) {
-                    $heroContents = [System.Collections.ArrayList]@()
-                    $heroContents.Add(@{
-                        type = "image"
-                        url = $finalThumbUrl
-                        size = "full"
-                        aspectRatio = "20:13"
-                        aspectMode = "cover"
-                    }) | Out-Null
-                    
-                    # ป้ายกำกับลอยทับรูป
-                    if (-not [string]::IsNullOrWhiteSpace($p6)) {
-                        $heroContents.Add(@{
-                            type = "box"
-                            layout = "vertical"
-                            position = "absolute"
-                            backgroundColor = "#FF9800" 
-                            cornerRadius = "md"
-                            paddingAll = "sm"
-                            offsetTop = "10px"
-                            offsetLeft = "10px"
-                            contents = [array]@(
-                                @{
-                                    type = "text"
-                                    text = $p6
-                                    color = "#FFFFFF"
-                                    size = "xs"
-                                    weight = "bold"
-                                }
-                            )
-                        }) | Out-Null
-                    }
-                    
-                    $bubble["hero"] = @{
-                        type = "box"
-                        layout = "vertical"
-                        contents = [array]$heroContents
-                    }
+                    $col["thumbnailImageUrl"] = $finalThumbUrl
                 }
 
                 $groupKey = "${rawSendAt}_${p5}"
                 if (-not $carouselGroups.ContainsKey($groupKey)) {
-                    $carouselGroups[$groupKey] = [System.Collections.ArrayList]@()
+                    $carouselGroups[$groupKey] = @()
                 }
-                $carouselGroups[$groupKey].Add($bubble) | Out-Null
+                $carouselGroups[$groupKey] += $col
             }
         }
     } catch {}
 }
 
-# จัดเตรียมข้อความส่ง
-$finalMessages = [System.Collections.ArrayList]@()
+$finalMessages = @()
 
 foreach ($key in $textMessages.Keys) { 
     $cleanText = $textMessages[$key].Trim()
     if (-not [string]::IsNullOrWhiteSpace($cleanText)) {
-        $finalMessages.Add(@{ type = "text"; text = $cleanText }) | Out-Null
+        $finalMessages += @{ type = "text"; text = $cleanText } 
     }
 }
 
-foreach ($msg in $otherMessages) {
-    $finalMessages.Add($msg) | Out-Null
-}
+$finalMessages += $otherMessages
 
 foreach ($gKey in $carouselGroups.Keys) {
     $cols = $carouselGroups[$gKey]
@@ -181,24 +113,25 @@ foreach ($gKey in $carouselGroups.Keys) {
     $groupName = ($gKey -split "_")[1]
     
     if ($groupName -ne "DefaultGroup") {
-        $finalMessages.Add(@{ type = "text"; text = "📌 $groupName" }) | Out-Null
+        $finalMessages += @{ type = "text"; text = "📌 $groupName" }
     }
     
-    $finalMessages.Add(@{ 
-        type = "flex"
+    # กลับมาใช้ Template Message ที่เสถียรที่สุด
+    $finalMessages += @{ 
+        type = "template"
         altText = "คุณได้รับข้อความกลุ่ม $groupName"
-        contents = @{ 
+        template = @{ 
             type = "carousel"
-            contents = [array]$cols 
+            columns = $cols 
         } 
-    }) | Out-Null
+    }
 }
 
 if ($finalMessages.Count -gt 5) { $finalMessages = $finalMessages[0..4] }
 
 if ($finalMessages.Count -gt 0) {
     foreach ($id in $groupIds) {
-        $body = @{ to = $id.Trim(); messages = [array]$finalMessages } | ConvertTo-Json -Depth 15
+        $body = @{ to = $id.Trim(); messages = $finalMessages } | ConvertTo-Json -Depth 15
         Invoke-RestMethod -Uri "https://api.line.me/v2/bot/message/push" -Method Post -Headers @{ "Authorization" = "Bearer $token"; "Content-Type" = "application/json" } -Body $body
     }
 }
