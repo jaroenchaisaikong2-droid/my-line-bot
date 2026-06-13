@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันร่างสุดยอด: รองรับระบบหัวตาราง 2 ภาษา + ผ่อนผันเวลา 5 นาที)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชันปฏิวัติระบบ: ดึงตรงด้วย Google CSV API + ผ่อนผัน 5 นาที)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -16,18 +16,21 @@ if ([string]::IsNullOrEmpty($sheetUrl)) {
     exit 0
 }
 
-# 2. ดึงข้อมูลจาก Google Sheets
-Write-Host "กำลังเชื่อมต่อเพื่อดึงตารางงานจาก Google Sheets..."
+# 2. ดึงข้อมูลสดๆ จาก Google Sheets รูปแบบ CSV
+Write-Host "กำลังดึงข้อมูลตารางงานสดจาก Google Sheets API..."
 try {
-    $jsonContent = Invoke-RestMethod -Uri $sheetUrl -Method Get -TimeoutSec 15
-    if ([string]::IsNullOrWhiteSpace($jsonContent)) {
-        Write-Warning "⚠️ ข้อมูลที่ดึงมาจาก Google Sheets เป็นค่าว่างเปล่า"
+    # ดาวน์โหลดข้อมูล CSV แบบเปิดใจกว้าง บังคับใช้ Encoding เป็น UTF-8 สำหรับภาษาไทย
+    $csvRaw = Invoke-RestMethod -Uri $sheetUrl -Method Get -TimeoutSec 15
+    if ([string]::IsNullOrWhiteSpace($csvRaw)) {
+        Write-Warning "⚠️ ข้อมูลที่ดึงมาจาก Google Sheets ว่างเปล่า"
         exit 0
     }
-    $tasks = ConvertFrom-Json $jsonContent
+    
+    # แปลงข้อมูลจาก CSV ให้กลายเป็นวัตถุในระบบอัตโนมัติ
+    $tasks = ConvertFrom-Csv -InputObject $csvRaw
 } 
 catch {
-    Write-Warning "❌ ไม่สามารถดึงข้อมูลหรือแปลง JSON ได้: $_"
+    Write-Warning "❌ ไม่สามารถดึงข้อมูลตรงจาก Google Sheets ได้: $_"
     exit 0
 }
 
@@ -36,39 +39,33 @@ $matchedMessages = @()
 # วนลูปตรวจเช็คตารางงาน
 foreach ($task in $tasks) {
     
-    # [ปรับปรุงใหม่] ดึงค่าเวลาโดยรองรับทั้งคีย์ภาษาอังกฤษ และ ภาษาไทย
+    # ค้นหาค่าเวลา รองรับหัวตารางภาษาอังกฤษ (sendAt) หรือภาษาไทย (วันที่และเวลา)
     $rawSendAt = $null
     if ($task.sendAt) { $rawSendAt = $task.sendAt }
-    elif ($task.'วันที่และเวลา') { $rawSendAt = $task.'วันที่และเวลา' }
+    elseif ($task.'วันที่และเวลา') { $rawSendAt = $task.'วันที่และเวลา' }
     
-    # ถ้าไม่มีข้อมูลเวลาเลยให้ข้ามแถวนี้ไป
     if ([string]::IsNullOrEmpty($rawSendAt)) { continue }
     
-    # แยกส่วน วันที่@เวลา ออกจากกัน
     $timeParts = $rawSendAt -split "@"
     if ($timeParts.Length -lt 2) { continue }
     
     $taskDate = $timeParts[0].Trim()
     $taskTimeStr = $timeParts[1].Trim().Replace(".", ":")
 
-    # ตรวจสอบว่าเป็นวันที่ปัจจุบัน
+    # ตรวจสอบเงื่อนไขวันที่ปัจจุบัน
     if ($taskDate -eq $currentDateStr) {
         
-        # แปลงข้อความเวลาในตารางให้กลายเป็นวัตถุเวลา DateTime
         if ([DateTime]::TryParseExact($taskTimeStr, "HH:mm", [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$taskTime)) {
             
-            # วัตถุเวลาปัจจุบัน (ชั่วโมงและนาที)
             $currentHourMin = [DateTime]::ParseExact($taiTime.ToString("HH:mm"), "HH:mm", [System.Globalization.CultureInfo]::InvariantCulture)
-
-            # คำนวณความต่างของเวลา (นาทีปัจจุบัน - นาทีในตาราง)
             $timeDiff = $currentHourMin - $taskTime
             $minutesDiff = $timeDiff.TotalMinutes
 
-            # กฎผ่อนผันเวลา: ตรงเวลาเป๊ะ (0) หรือเลทไปไม่เกิน 5 นาที (1 ถึง 5)
+            # กฎผ่อนผันเวลาเลทได้ไม่เกิน 5 นาที
             if ($minutesDiff -ge 0 -and $minutesDiff -le 5) {
                 Write-Host "🎯 เจอคิวงานในตารางเวลา: $taskTimeStr (เลทไป $minutesDiff นาที) -> ผ่านเงื่อนไข"
                 
-                # ดึงข้อมูลข้อความ/ประเภท โดยรองรับทั้งระบบคีย์อังกฤษและไทย
+                # รองรับหัวคอลัมน์ทั้ง 2 ภาษา
                 $type = if ($task.type) { $task.type } else { $task.'ประเภทข้อความ' }
                 $param1 = if ($task.param1) { $task.param1 } else { $task.'ข้อความ / ลิงก์รูปภาพ' }
                 $param2 = if ($task.param2) { $task.param2 } else { $task.'รหัสสติกเกอร์ / พิกัด' }
@@ -92,7 +89,7 @@ foreach ($task in $tasks) {
     }
 }
 
-# 3. ส่งข้อมูลเข้ากลุ่ม LINE ทุกกลุ่ม
+# 3. ส่งข้อมูลเข้ากลุ่ม LINE
 if ($matchedMessages.Count -gt 0) {
     Write-Host "กำลังจัดส่งข้อความรวมทั้งหมด $($matchedMessages.Count) ชิ้น..."
 
