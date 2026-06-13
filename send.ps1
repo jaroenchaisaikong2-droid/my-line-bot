@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันป้องกันลิงก์รูปภาพพัง)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชันแยกกลุ่ม Carousel อิสระด้วย Param5)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -13,7 +13,7 @@ $csvRaw = Invoke-RestMethod -Uri $sheetUrl -Method Get -TimeoutSec 15
 $tasks = ConvertFrom-Csv -InputObject $csvRaw | Where-Object { $_.SendAt -or $_.'วันที่และเวลา' }
 
 $textMessages = @{} 
-$carouselColumns = @() 
+$carouselGroups = @{} # [เปลี่ยนใหม่] เก็บ Carousel แยกเป็นกลุ่มๆ
 $otherMessages = @() 
 
 foreach ($task in $tasks) {
@@ -34,6 +34,9 @@ foreach ($task in $tasks) {
             $p2 = if ($task.Param2) { $task.Param2 } else { $task.'รหัสสติกเกอร์ / พิกัด' }
             $p3 = if ($task.Param3) { $task.Param3 } else { $task.'ลิงก์รูปภาพ' }
             $p4 = if ($task.Param4) { $task.Param4 } else { $task.'ลิงก์ URL' }
+            
+            # [ของใหม่] ตัวแปรกลุ่ม ถ้าไม่ได้กรอก จะเหมาว่าเป็น "DefaultGroup"
+            $p5 = if ($task.Param5) { $task.Param5 } else { "DefaultGroup" }
 
             if ($type -eq "text") {
                 if ($textMessages.ContainsKey($rawSendAt)) { $textMessages[$rawSendAt] += "`n" + $p1 }
@@ -43,20 +46,20 @@ foreach ($task in $tasks) {
                 $otherMessages += @{ type = "sticker"; packageId = $p1; stickerId = $p2 }
             }
             elseif ($type -eq "carousel") {
-                # สร้างการ์ดพื้นฐาน
                 $col = @{
                     title = if ([string]::IsNullOrWhiteSpace($p1)) { "-" } else { $p1 }
                     text = if ([string]::IsNullOrWhiteSpace($p2)) { "-" } else { $p2 }
-                    # ตรวจสอบลิงก์ปุ่มกด ถ้าไม่มีหรือผิดรูปแบบ ให้ไปที่ line.me แทนกันพัง
                     actions = @(@{ type = "uri"; label = "ดูรายละเอียด"; uri = if ($p4 -match "^https?://") { $p4 } else { "https://line.me" } })
                 }
+                if ($p3 -match "^https?://") { $col["thumbnailImageUrl"] = $p3 }
                 
-                # [จุดสำคัญ] ตรวจสอบรูปภาพ ถ้าเป็นลิงก์จริงๆ ค่อยใส่ ถ้าไม่ใช่ให้ปล่อยว่างไว้
-                if ($p3 -match "^https?://") {
-                    $col["thumbnailImageUrl"] = $p3
+                # [ของใหม่] นำเวลาและชื่อกลุ่มมาต่อกันเป็นกุญแจ (เช่น "14:00_ชุดที่1") เพื่อแยกหมวดหมู่
+                $groupKey = "${rawSendAt}_${p5}"
+                
+                if (-not $carouselGroups.ContainsKey($groupKey)) {
+                    $carouselGroups[$groupKey] = @()
                 }
-                
-                $carouselColumns += $col
+                $carouselGroups[$groupKey] += $col
             }
         }
     } catch {
@@ -65,16 +68,26 @@ foreach ($task in $tasks) {
 }
 
 $finalMessages = @()
+
+# 1. นำข้อความ Text เข้าคิว
 foreach ($key in $textMessages.Keys) { $finalMessages += @{ type = "text"; text = $textMessages[$key] } }
+
+# 2. นำสติกเกอร์เข้าคิว
 $finalMessages += $otherMessages
 
-if ($carouselColumns.Count -gt 0) {
-    # ข้อควรระวังของ LINE API: Carousel ส่งได้สูงสุด 10 การ์ดต่อ 1 ชุดข้อความ
-    if ($carouselColumns.Count -gt 10) {
-        $carouselColumns = $carouselColumns[0..9]
-    }
+# 3. [ของใหม่] นำ Carousel แต่ละกลุ่มเข้าคิว
+foreach ($gKey in $carouselGroups.Keys) {
+    $cols = $carouselGroups[$gKey]
+    # LINE จำกัด 1 กลุ่มมีได้ไม่เกิน 10 การ์ด
+    if ($cols.Count -gt 10) { $cols = $cols[0..9] } 
     
-    $finalMessages += @{ type = "template"; altText = "รายการวันนี้"; template = @{ type = "carousel"; columns = $carouselColumns } }
+    $finalMessages += @{ type = "template"; altText = "คุณได้รับข้อความแบบการ์ด"; template = @{ type = "carousel"; columns = $cols } }
+}
+
+# [ข้อควรระวัง] LINE API อนุญาตให้ส่งข้อความ (บอลลูน) ได้สูงสุด 5 ก้อนต่อ 1 การรัน
+if ($finalMessages.Count -gt 5) {
+    Write-Warning "มีข้อความเกิน 5 ก้อน ระบบจะส่งแค่ 5 ก้อนแรกตามข้อจำกัดของ LINE API"
+    $finalMessages = $finalMessages[0..4]
 }
 
 if ($finalMessages.Count -gt 0) {
