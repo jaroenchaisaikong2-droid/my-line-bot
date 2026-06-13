@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Ultimate: รองรับ ทุกวัน + Microlink API + URL Cleaner)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Bulletproof URI: กำจัดอักขระล่องหน 100%)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -55,16 +55,23 @@ foreach ($task in $tasks) {
                     $titleText = if ([string]::IsNullOrWhiteSpace($p1)) { "-" } else { $p1 }
                     $descText = if ([string]::IsNullOrWhiteSpace($p2)) { "-" } else { $p2 }
                     
-                    # 🌟 [ระบบใหม่] ทำความสะอาด URL ลบช่องว่างหรือ Enter ที่ติดมาออกให้หมด
-                    $cleanP4 = if ([string]::IsNullOrWhiteSpace($p4)) { "" } else { $p4.Trim() -replace '\s+', '' }
-                    $cleanP3 = if ([string]::IsNullOrWhiteSpace($p3)) { "" } else { $p3.Trim() -replace '\s+', '' }
+                    # 🌟 [ระบบกรองขั้นสุดยอด] ลบช่องว่าง, เคาะบรรทัด และ "อักขระล่องหน" ที่แอบติดมาตอนก๊อปปี้
+                    $cleanP4 = if ([string]::IsNullOrWhiteSpace($p4)) { "" } else { $p4 -replace '[\s\x00-\x1F\x7F-\x9F\u200B-\u200D\uFEFF]', '' }
+                    $cleanP3 = if ([string]::IsNullOrWhiteSpace($p3)) { "" } else { $p3 -replace '[\s\x00-\x1F\x7F-\x9F\u200B-\u200D\uFEFF]', '' }
                     
-                    $uriLink = if ($cleanP4 -match "^https?://") { $cleanP4 } else { "https://line.me" }
+                    # แปลงเป็น URL มาตรฐาน หากแปลงไม่ได้ให้สลับไปใช้ line.me แทนเพื่อป้องกันระบบพัง
+                    $uriLink = "https://line.me"
+                    if ($cleanP4 -match "^https?://") {
+                        try { $uriLink = ([System.Uri]$cleanP4).AbsoluteUri } 
+                        catch { $uriLink = "https://line.me" }
+                    }
                     
                     # --- หารูปภาพปกอัตโนมัติ ---
                     $finalThumbUrl = $null
                     
-                    if ($cleanP3 -match "^https?://") { $finalThumbUrl = $cleanP3 }
+                    if ($cleanP3 -match "^https?://") { 
+                        try { $finalThumbUrl = ([System.Uri]$cleanP3).AbsoluteUri } catch {}
+                    }
                     elseif ($cleanP4 -match "youtu\.be/([^?]+)|youtube\.com/watch\?v=([^&]+)") {
                         $videoId = if ($matches[1]) { $matches[1] } else { $matches[2] }
                         $finalThumbUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
