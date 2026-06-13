@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันกรองแถวว่างแบบ 100%)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชันป้องกันลิงก์รูปภาพพัง)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -9,7 +9,6 @@ $sheetUrl = $env:GOOGLE_SHEET_API_URL
 $taiTime = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([System.DateTime]::Now, "SE Asia Standard Time")
 $currentDateStr = $taiTime.ToString("dd/MM/yyyy", [System.Globalization.CultureInfo]::InvariantCulture)
 
-# ดึงข้อมูลและตัดแถวว่างออกก่อนเริ่ม
 $csvRaw = Invoke-RestMethod -Uri $sheetUrl -Method Get -TimeoutSec 15
 $tasks = ConvertFrom-Csv -InputObject $csvRaw | Where-Object { $_.SendAt -or $_.'วันที่และเวลา' }
 
@@ -18,20 +17,16 @@ $carouselColumns = @()
 $otherMessages = @() 
 
 foreach ($task in $tasks) {
-    # ดึงค่าเวลา
     $rawSendAt = if ($task.SendAt) { $task.SendAt } else { $task.'วันที่และเวลา' }
-    
-    # ถ้าบรรทัดไหนไม่มีเวลา ให้กระโดดข้ามทันที
     if ([string]::IsNullOrWhiteSpace($rawSendAt)) { continue }
 
     try {
         $timeParts = $rawSendAt -split "@"
-        if ($timeParts.Count -lt 2) { continue } # ถ้าไม่มี @ ให้ข้าม
+        if ($timeParts.Count -lt 2) { continue } 
 
         $taskTime = [DateTime]::ParseExact($timeParts[1].Trim().Replace(".", ":"), "HH:mm", $null)
         $currentHourMin = [DateTime]::ParseExact($taiTime.ToString("HH:mm"), "HH:mm", $null)
         
-        # เงื่อนไขเวลา +/- 5 นาที
         if ([Math]::Abs(($currentHourMin - $taskTime).TotalMinutes) -le 5) {
             
             $type = if ($task.Type) { $task.Type } else { $task.'ประเภทข้อความ' }
@@ -48,25 +43,37 @@ foreach ($task in $tasks) {
                 $otherMessages += @{ type = "sticker"; packageId = $p1; stickerId = $p2 }
             }
             elseif ($type -eq "carousel") {
-                $carouselColumns += @{
-                    thumbnailImageUrl = $p3
-                    title = $p1
-                    text = $p2
-                    actions = @(@{ type = "uri"; label = "ดูรายละเอียด"; uri = $p4 })
+                # สร้างการ์ดพื้นฐาน
+                $col = @{
+                    title = if ([string]::IsNullOrWhiteSpace($p1)) { "-" } else { $p1 }
+                    text = if ([string]::IsNullOrWhiteSpace($p2)) { "-" } else { $p2 }
+                    # ตรวจสอบลิงก์ปุ่มกด ถ้าไม่มีหรือผิดรูปแบบ ให้ไปที่ line.me แทนกันพัง
+                    actions = @(@{ type = "uri"; label = "ดูรายละเอียด"; uri = if ($p4 -match "^https?://") { $p4 } else { "https://line.me" } })
                 }
+                
+                # [จุดสำคัญ] ตรวจสอบรูปภาพ ถ้าเป็นลิงก์จริงๆ ค่อยใส่ ถ้าไม่ใช่ให้ปล่อยว่างไว้
+                if ($p3 -match "^https?://") {
+                    $col["thumbnailImageUrl"] = $p3
+                }
+                
+                $carouselColumns += $col
             }
         }
     } catch {
-        Write-Host "ข้ามแถวที่รูปแบบข้อมูลไม่ถูกต้อง"
+        Write-Host "ข้ามแถวที่ข้อมูลไม่สมบูรณ์"
     }
 }
 
-# จัดเตรียมและส่ง
 $finalMessages = @()
 foreach ($key in $textMessages.Keys) { $finalMessages += @{ type = "text"; text = $textMessages[$key] } }
 $finalMessages += $otherMessages
 
 if ($carouselColumns.Count -gt 0) {
+    # ข้อควรระวังของ LINE API: Carousel ส่งได้สูงสุด 10 การ์ดต่อ 1 ชุดข้อความ
+    if ($carouselColumns.Count -gt 10) {
+        $carouselColumns = $carouselColumns[0..9]
+    }
+    
     $finalMessages += @{ type = "template"; altText = "รายการวันนี้"; template = @{ type = "carousel"; columns = $carouselColumns } }
 }
 
