@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันดึงหน้าปก YouTube อัตโนมัติ)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Ultimate: ดูดปก YouTube, Heyzine, FlipHTML5 อัตโนมัติ)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -50,26 +50,36 @@ foreach ($task in $tasks) {
                     actions = @(@{ type = "uri"; label = "ดูรายละเอียด"; uri = if ($p4 -match "^https?://") { $p4 } else { "https://line.me" } })
                 }
                 
-                # --- [ระบบจัดการรูปภาพอัจฉริยะ] ---
+                # --- [ระบบดูดรูปภาพอัจฉริยะ (Web Scraping)] ---
                 $finalThumbUrl = $null
                 
-                # 1. ถ้ามีรูปภาพตรงๆ อยู่ใน Param3 ให้ใช้รูปนั้นเป็นอันดับแรก
+                # 1. ถ้ามีรูประบุไว้ชัดเจนใน Param3 ให้ใช้รูปนั้น
                 if ($p3 -match "^https?://") {
                     $finalThumbUrl = $p3
                 }
-                # 2. ถ้าช่องรูปว่างเปล่า ให้ตรวจสอบว่า URL เป็น YouTube หรือไม่
-                elseif ($p4 -match "youtu\.be/([^?]+)") {
-                    $finalThumbUrl = "https://img.youtube.com/vi/$($matches[1])/hqdefault.jpg"
+                # 2. กรณี YouTube
+                elseif ($p4 -match "youtu\.be/([^?]+)|youtube\.com/watch\?v=([^&]+)") {
+                    $videoId = if ($matches[1]) { $matches[1] } else { $matches[2] }
+                    $finalThumbUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
                 }
-                elseif ($p4 -match "youtube\.com/watch\?v=([^&]+)") {
-                    $finalThumbUrl = "https://img.youtube.com/vi/$($matches[1])/hqdefault.jpg"
+                # 3. [เพิ่มใหม่!] กรณี Heyzine หรือ FlipHTML5
+                elseif ($p4 -match "heyzine\.com|fliphtml5\.com") {
+                    try {
+                        # สั่งให้บอทวิ่งไปโหลดหน้าเว็บเพื่อหา Tag รูปภาพ (og:image)
+                        $htmlContent = Invoke-RestMethod -Uri $p4 -Method Get -TimeoutSec 8
+                        if ($htmlContent -match '(?i)<meta\s+(?:property|name)=["'']og:image["'']\s+content=["'']([^"'']+)["'']') {
+                            $finalThumbUrl = $matches[1].Replace("&amp;", "&")
+                        }
+                    } catch {
+                        Write-Warning "ไม่สามารถดึงภาพจากเว็บ $p4 ได้"
+                    }
                 }
                 
-                # ถ้าระบบได้ลิงก์รูปภาพมา (ไม่ว่าจาก Param3 หรือจากสูตร YouTube) ให้ยัดลงในการ์ด
+                # ถ้าระบบหาลิงก์รูปเจอ (ไม่ว่าจะจากวิธีไหน) ให้ใส่รูปในการ์ด
                 if ($null -ne $finalThumbUrl) {
                     $col["thumbnailImageUrl"] = $finalThumbUrl
                 }
-                # --------------------------------
+                # ----------------------------------------------
 
                 $groupKey = "${rawSendAt}_${p5}"
                 
@@ -103,7 +113,6 @@ foreach ($gKey in $carouselGroups.Keys) {
 }
 
 if ($finalMessages.Count -gt 5) {
-    Write-Warning "มีข้อความเกิน 5 ก้อน ระบบจะส่งแค่ 5 ก้อนแรก"
     $finalMessages = $finalMessages[0..4]
 }
 
