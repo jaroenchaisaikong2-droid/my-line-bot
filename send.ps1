@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันอัปเกรด: ผ่อนผันเวลาเรตให้ไม่เกิน 5 นาที)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชันมาตรฐานสากล: หัวตารางอังกฤษ + ผ่อนผันเวลา 5 นาที)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -35,6 +35,10 @@ $matchedMessages = @()
 
 # วนลูปตรวจเช็คตารางงาน
 foreach ($task in $tasks) {
+    
+    # [จุดแก้ไขสำคัญ] สั่งให้อ่านหัวตารางจากคีย์ภาษาอังกฤษ (sendAt) ตามหน้าตาราง Sheets ปัจจุบัน
+    if (-not $task.sendAt) { continue }
+    
     # แยกส่วน วันที่@เวลา ออกจากกัน
     $timeParts = $task.sendAt -split "@"
     if ($timeParts.Length -lt 2) { continue }
@@ -56,10 +60,11 @@ foreach ($task in $tasks) {
             $timeDiff = $currentHourMin - $taskTime
             $minutesDiff = $timeDiff.TotalMinutes
 
-            # [เงื่อนไขใหม่] ถ้ารันตรงเวลาเป๊ะ (0) หรือรันเลทไปไม่เกิน 5 นาที (1, 2, 3, 4, 5)
+            # ถ้ารันตรงเวลาเป๊ะ (0) หรือรันเลทไปไม่เกิน 5 นาที (1, 2, 3, 4, 5)
             if ($minutesDiff -ge 0 -and $minutesDiff -le 5) {
                 Write-Host "🎯 เจอคิวงานใกล้เคียง! เวลาในตาราง: $taskTimeStr (เลทไป $minutesDiff นาที) -> อนุญาตให้ส่งได้"
                 
+                # [จุดแก้ไขสำคัญ] ดึงค่าจากหัวตารางภาษาอังกฤษ (type, param1, param2)
                 $msgObject = @{}
                 if ($task.type -eq "text") {
                     $msgObject = @{ type = "text"; text = $task.param1 }
