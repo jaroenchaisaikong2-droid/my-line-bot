@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันปฏิวัติระบบ: ดึงตรงด้วย Google CSV API + ผ่อนผัน 5 นาที)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชันแก้ไขจุดบกพร่องตัวแปร [ref] สำหรับระบบ Linux)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -19,14 +19,11 @@ if ([string]::IsNullOrEmpty($sheetUrl)) {
 # 2. ดึงข้อมูลสดๆ จาก Google Sheets รูปแบบ CSV
 Write-Host "กำลังดึงข้อมูลตารางงานสดจาก Google Sheets API..."
 try {
-    # ดาวน์โหลดข้อมูล CSV แบบเปิดใจกว้าง บังคับใช้ Encoding เป็น UTF-8 สำหรับภาษาไทย
     $csvRaw = Invoke-RestMethod -Uri $sheetUrl -Method Get -TimeoutSec 15
     if ([string]::IsNullOrWhiteSpace($csvRaw)) {
         Write-Warning "⚠️ ข้อมูลที่ดึงมาจาก Google Sheets ว่างเปล่า"
         exit 0
     }
-    
-    # แปลงข้อมูลจาก CSV ให้กลายเป็นวัตถุในระบบอัตโนมัติ
     $tasks = ConvertFrom-Csv -InputObject $csvRaw
 } 
 catch {
@@ -39,10 +36,9 @@ $matchedMessages = @()
 # วนลูปตรวจเช็คตารางงาน
 foreach ($task in $tasks) {
     
-    # ค้นหาค่าเวลา รองรับหัวตารางภาษาอังกฤษ (sendAt) หรือภาษาไทย (วันที่และเวลา)
     $rawSendAt = $null
     if ($task.sendAt) { $rawSendAt = $task.sendAt }
-    elseif ($task.'วันที่และเวลา') { $rawSendAt = $task.'วันที่และเวลา' }
+    elif ($task.'วันที่และเวลา') { $rawSendAt = $task.'วันที่และเวลา' }
     
     if ([string]::IsNullOrEmpty($rawSendAt)) { continue }
     
@@ -52,9 +48,11 @@ foreach ($task in $tasks) {
     $taskDate = $timeParts[0].Trim()
     $taskTimeStr = $timeParts[1].Trim().Replace(".", ":")
 
-    # ตรวจสอบเงื่อนไขวันที่ปัจจุบัน
     if ($taskDate -eq $currentDateStr) {
         
+        # [จุดแก้ไขสำคัญ] บังคับสร้างตัวแปรมารองรับค่าล่วงหน้า เพื่อป้องกันระบบ Linux ฟ้อง Error [ref]
+        $taskTime = [DateTime]::MinValue
+
         if ([DateTime]::TryParseExact($taskTimeStr, "HH:mm", [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$taskTime)) {
             
             $currentHourMin = [DateTime]::ParseExact($taiTime.ToString("HH:mm"), "HH:mm", [System.Globalization.CultureInfo]::InvariantCulture)
@@ -65,7 +63,6 @@ foreach ($task in $tasks) {
             if ($minutesDiff -ge 0 -and $minutesDiff -le 5) {
                 Write-Host "🎯 เจอคิวงานในตารางเวลา: $taskTimeStr (เลทไป $minutesDiff นาที) -> ผ่านเงื่อนไข"
                 
-                # รองรับหัวคอลัมน์ทั้ง 2 ภาษา
                 $type = if ($task.type) { $task.type } else { $task.'ประเภทข้อความ' }
                 $param1 = if ($task.param1) { $task.param1 } else { $task.'ข้อความ / ลิงก์รูปภาพ' }
                 $param2 = if ($task.param2) { $task.param2 } else { $task.'รหัสสติกเกอร์ / พิกัด' }
