@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันถึกทน: ข้ามแถวว่างอัตโนมัติ)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชันกรองแถวว่างแบบ 100%)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -9,37 +9,36 @@ $sheetUrl = $env:GOOGLE_SHEET_API_URL
 $taiTime = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([System.DateTime]::Now, "SE Asia Standard Time")
 $currentDateStr = $taiTime.ToString("dd/MM/yyyy", [System.Globalization.CultureInfo]::InvariantCulture)
 
-# ดึงข้อมูลและจัดการกรณีดึงไม่ได้
-try {
-    $csvRaw = Invoke-RestMethod -Uri $sheetUrl -Method Get -TimeoutSec 15
-    $tasks = ConvertFrom-Csv -InputObject $csvRaw
-} catch {
-    Write-Warning "❌ ดึงข้อมูลจาก Sheets ล้มเหลว"
-    exit
-}
+# ดึงข้อมูลและตัดแถวว่างออกก่อนเริ่ม
+$csvRaw = Invoke-RestMethod -Uri $sheetUrl -Method Get -TimeoutSec 15
+$tasks = ConvertFrom-Csv -InputObject $csvRaw | Where-Object { $_.SendAt -or $_.'วันที่และเวลา' }
 
 $textMessages = @{} 
 $carouselColumns = @() 
 $otherMessages = @() 
 
 foreach ($task in $tasks) {
-    # [จุดสำคัญ] สั่งข้ามแถวที่ไม่มีวันที่ทันที ป้องกัน Error Null
-    $rawSendAt = if ($task.SendAt) { $task.SendAt } elseif ($task.'วันที่และเวลา') { $task.'วันที่และเวลา' }
+    # ดึงค่าเวลา
+    $rawSendAt = if ($task.SendAt) { $task.SendAt } else { $task.'วันที่และเวลา' }
+    
+    # ถ้าบรรทัดไหนไม่มีเวลา ให้กระโดดข้ามทันที
     if ([string]::IsNullOrWhiteSpace($rawSendAt)) { continue }
 
-    # จัดการส่วนเวลา
     try {
         $timeParts = $rawSendAt -split "@"
+        if ($timeParts.Count -lt 2) { continue } # ถ้าไม่มี @ ให้ข้าม
+
         $taskTime = [DateTime]::ParseExact($timeParts[1].Trim().Replace(".", ":"), "HH:mm", $null)
         $currentHourMin = [DateTime]::ParseExact($taiTime.ToString("HH:mm"), "HH:mm", $null)
         
+        # เงื่อนไขเวลา +/- 5 นาที
         if ([Math]::Abs(($currentHourMin - $taskTime).TotalMinutes) -le 5) {
             
-            $type = if ($task.Type) { $task.Type } elseif ($task.'ประเภทข้อความ') { $task.'ประเภทข้อความ' }
-            $p1 = if ($task.Param1) { $task.Param1 } elseif ($task.'ข้อความ / ลิงก์รูปภาพ') { $task.'ข้อความ / ลิงก์รูปภาพ' }
-            $p2 = if ($task.Param2) { $task.Param2 } elseif ($task.'รหัสสติกเกอร์ / พิกัด') { $task.'รหัสสติกเกอร์ / พิกัด' }
-            $p3 = if ($task.Param3) { $task.Param3 } elseif ($task.'ลิงก์รูปภาพ') { $task.'ลิงก์รูปภาพ' }
-            $p4 = if ($task.Param4) { $task.Param4 } elseif ($task.'ลิงก์ URL') { $task.'ลิงก์ URL' }
+            $type = if ($task.Type) { $task.Type } else { $task.'ประเภทข้อความ' }
+            $p1 = if ($task.Param1) { $task.Param1 } else { $task.'ข้อความ / ลิงก์รูปภาพ' }
+            $p2 = if ($task.Param2) { $task.Param2 } else { $task.'รหัสสติกเกอร์ / พิกัด' }
+            $p3 = if ($task.Param3) { $task.Param3 } else { $task.'ลิงก์รูปภาพ' }
+            $p4 = if ($task.Param4) { $task.Param4 } else { $task.'ลิงก์ URL' }
 
             if ($type -eq "text") {
                 if ($textMessages.ContainsKey($rawSendAt)) { $textMessages[$rawSendAt] += "`n" + $p1 }
@@ -58,24 +57,19 @@ foreach ($task in $tasks) {
             }
         }
     } catch {
-        Write-Host "⚠️ ข้ามแถวที่มีข้อมูลไม่สมบูรณ์: $rawSendAt"
+        Write-Host "ข้ามแถวที่รูปแบบข้อมูลไม่ถูกต้อง"
     }
 }
 
-# จัดเตรียมข้อความส่ง
+# จัดเตรียมและส่ง
 $finalMessages = @()
 foreach ($key in $textMessages.Keys) { $finalMessages += @{ type = "text"; text = $textMessages[$key] } }
 $finalMessages += $otherMessages
 
 if ($carouselColumns.Count -gt 0) {
-    $finalMessages += @{
-        type = "template"
-        altText = "รายการวันนี้"
-        template = @{ type = "carousel"; columns = $carouselColumns }
-    }
+    $finalMessages += @{ type = "template"; altText = "รายการวันนี้"; template = @{ type = "carousel"; columns = $carouselColumns } }
 }
 
-# ส่งเข้า Line
 if ($finalMessages.Count -gt 0) {
     foreach ($id in $groupIds) {
         $body = @{ to = $id.Trim(); messages = $finalMessages } | ConvertTo-Json -Depth 10
