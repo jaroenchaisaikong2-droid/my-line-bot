@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Ultimate Flex: คืนชีพสีสัน ตัวหนา และป้ายกำกับ)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Strict JSON ป้องกันบั๊ก PowerShell 100%)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -42,7 +42,7 @@ foreach ($task in $tasks) {
                 else { $textMessages[$rawSendAt] = $p1 }
             }
             elseif ($type -eq "sticker") {
-                $otherMessages += @{ type = "sticker"; packageId = $p1; stickerId = $p2 }
+                $otherMessages += [ordered]@{ type = "sticker"; packageId = $p1; stickerId = $p2 }
             }
             elseif ($type -eq "carousel") {
                 
@@ -50,77 +50,7 @@ foreach ($task in $tasks) {
                 $descText = if ([string]::IsNullOrWhiteSpace($p2)) { "-" } else { $p2 }
                 $uriLink = if ($p4 -match "^https?://") { $p4 } else { "https://line.me" }
                 
-                # --- [สร้างเนื้อหาภายในการ์ดแบบ Flex] ---
-                $bodyContents = @()
-                
-                # 1. ส่วนป้ายกำกับ (Badge) ถ้ามีการระบุใน Param6 จะสร้างกล่องสีส้มขึ้นมาโชว์ด้านบนสุด
-                if (-not [string]::IsNullOrWhiteSpace($p6)) {
-                    $bodyContents += @{
-                        type = "box"
-                        layout = "inline"
-                        contents = @(
-                            @{
-                                type = "text"
-                                text = " $p6 "
-                                color = "#FFFFFF"
-                                size = "xs"
-                                weight = "bold"
-                                backgroundColor = "#FF9800" # 🎨 สีพื้นหลังป้ายกำกับ (เปลี่ยนสีกระตุ้นความสนใจได้)
-                                align = "center"
-                            }
-                        )
-                    }
-                }
-                
-                # 2. ส่วนหัวข้อ (Title) ตั้งค่าตัวหนา และใส่สีสัน
-                $bodyContents += @{
-                    type = "text"
-                    text = $titleText
-                    weight = "bold"
-                    size = "xl"
-                    color = "#E53935" # 🎨 สีตัวอักษรหัวข้อ (ปัจจุบัน: สีแดงเด่นชัด)
-                    wrap = $true
-                    margin = "md"
-                }
-                
-                # 3. ส่วนรายละเอียด (Description) ตัวหนาตามใจสั่ง
-                $bodyContents += @{
-                    type = "text"
-                    text = $descText
-                    weight = "bold" # 🌟 ตั้งค่าเป็นตัวหนาเรียบร้อยครับ
-                    size = "sm"
-                    color = "#555555"
-                    wrap = $true
-                    margin = "sm"
-                }
-                
-                # ประกอบโครงสร้าง Bubble การ์ด
-                $bubble = @{
-                    type = "bubble"
-                    body = @{
-                        type = "box"
-                        layout = "vertical"
-                        contents = $bodyContents
-                    }
-                    footer = @{
-                        type = "box"
-                        layout = "vertical"
-                        contents = @(
-                            @{
-                                type = "button"
-                                style = "primary"
-                                color = "#1E88E5" # 🎨 สีปุ่มกด (ปัจจุบัน: สีน้ำเงินพรีเมียม)
-                                action = @{
-                                    type = "uri"
-                                    label = "ดูรายละเอียด"
-                                    uri = $uriLink
-                                }
-                            }
-                        )
-                    }
-                }
-                
-                # --- ระบบดูดรูปภาพปกอัตโนมัติ (YouTube / Heyzine / FlipHTML5) ---
+                # --- หารูปภาพปกอัตโนมัติ ---
                 $finalThumbUrl = $null
                 if ($p3 -match "^https?://") { $finalThumbUrl = $p3 }
                 elseif ($p4 -match "youtu\.be/([^?]+)|youtube\.com/watch\?v=([^&]+)") {
@@ -135,15 +65,120 @@ foreach ($task in $tasks) {
                         }
                     } catch {}
                 }
-                
+
+                # --- 1. สร้าง Hero Box (ส่วนรูปภาพ) ---
+                $heroBox = $null
                 if ($null -ne $finalThumbUrl) {
-                    $bubble["hero"] = @{
+                    $heroItems = @()
+                    $heroItems += [ordered]@{
                         type = "image"
                         url = $finalThumbUrl
                         size = "full"
                         aspectRatio = "20:13"
                         aspectMode = "cover"
                     }
+                    # ถ้ามีป้ายกำกับ ให้แปะทับรูป
+                    if (-not [string]::IsNullOrWhiteSpace($p6)) {
+                        $heroItems += [ordered]@{
+                            type = "box"
+                            layout = "vertical"
+                            position = "absolute"
+                            backgroundColor = "#FF9800"
+                            cornerRadius = "md"
+                            paddingAll = "sm"
+                            offsetTop = "10px"
+                            offsetLeft = "10px"
+                            contents = @(
+                                [ordered]@{
+                                    type = "text"
+                                    text = " $p6 "
+                                    color = "#FFFFFF"
+                                    size = "xs"
+                                    weight = "bold"
+                                }
+                            )
+                        }
+                    }
+                    $heroBox = [ordered]@{
+                        type = "box"
+                        layout = "vertical"
+                        contents = [array]$heroItems
+                    }
+                }
+
+                # --- 2. สร้าง Body Box (ส่วนเนื้อหา) ---
+                $bodyItems = @()
+                
+                # ถ้าไม่มีรูปภาพ แต่มีป้ายกำกับ ให้นำป้ายกำกับมาวางไว้บนสุดของเนื้อหา
+                if (-not [string]::IsNullOrWhiteSpace($p6) -and $null -eq $heroBox) {
+                    $bodyItems += [ordered]@{
+                        type = "box"
+                        layout = "inline"
+                        contents = @(
+                            [ordered]@{
+                                type = "text"
+                                text = " $p6 "
+                                color = "#FFFFFF"
+                                size = "xs"
+                                weight = "bold"
+                                backgroundColor = "#FF9800"
+                                align = "center"
+                            }
+                        )
+                    }
+                }
+
+                $bodyItems += [ordered]@{
+                    type = "text"
+                    text = $titleText
+                    weight = "bold"
+                    size = "xl"
+                    color = "#E53935"
+                    wrap = $true
+                    margin = "md"
+                }
+                
+                $bodyItems += [ordered]@{
+                    type = "text"
+                    text = $descText
+                    weight = "bold"
+                    size = "sm"
+                    color = "#555555"
+                    wrap = $true
+                    margin = "sm"
+                }
+
+                # --- 3. สร้าง Footer Box (ส่วนปุ่มกด) ---
+                $footerBox = [ordered]@{
+                    type = "box"
+                    layout = "vertical"
+                    contents = @(
+                        [ordered]@{
+                            type = "button"
+                            style = "primary"
+                            color = "#1E88E5"
+                            action = [ordered]@{
+                                type = "uri"
+                                label = "ดูรายละเอียด"
+                                uri = $uriLink
+                            }
+                        }
+                    )
+                }
+
+                # --- ประกอบร่าง Bubble ---
+                $bubble = [ordered]@{
+                    type = "bubble"
+                    body = [ordered]@{
+                        type = "box"
+                        layout = "vertical"
+                        contents = [array]$bodyItems
+                    }
+                    footer = $footerBox
+                }
+                
+                if ($null -ne $heroBox) {
+                    $bubble["hero"] = $heroBox
                 }
 
                 $groupKey = "${rawSendAt}_${p5}"
@@ -158,15 +193,20 @@ foreach ($task in $tasks) {
 
 $finalMessages = @()
 
+# จัดคิวข้อความ Text
 foreach ($key in $textMessages.Keys) { 
     $cleanText = $textMessages[$key].Trim()
     if (-not [string]::IsNullOrWhiteSpace($cleanText)) {
-        $finalMessages += @{ type = "text"; text = $cleanText } 
+        $finalMessages += [ordered]@{ type = "text"; text = $cleanText } 
     }
 }
 
-$finalMessages += $otherMessages
+# จัดคิวข้อความ Sticker
+foreach ($msg in $otherMessages) {
+    $finalMessages += $msg
+}
 
+# จัดคิวข้อความ Flex Carousel
 foreach ($gKey in $carouselGroups.Keys) {
     $cols = $carouselGroups[$gKey]
     if ($cols.Count -gt 10) { $cols = $cols[0..9] } 
@@ -174,24 +214,25 @@ foreach ($gKey in $carouselGroups.Keys) {
     $groupName = ($gKey -split "_")[1]
     
     if ($groupName -ne "DefaultGroup") {
-        $finalMessages += @{ type = "text"; text = "📌 $groupName" }
+        $finalMessages += [ordered]@{ type = "text"; text = "📌 $groupName" }
     }
     
-    $finalMessages += @{ 
+    $finalMessages += [ordered]@{ 
         type = "flex"
         altText = "คุณได้รับข้อความกลุ่ม $groupName"
-        contents = @{ 
+        contents = [ordered]@{ 
             type = "carousel"
-            contents = $cols 
+            contents = [array]$cols 
         } 
     }
 }
 
 if ($finalMessages.Count -gt 5) { $finalMessages = $finalMessages[0..4] }
 
+# ส่งไปยัง LINE
 if ($finalMessages.Count -gt 0) {
     foreach ($id in $groupIds) {
-        $body = @{ to = $id.Trim(); messages = $finalMessages } | ConvertTo-Json -Depth 15
+        $body = @{ to = $id.Trim(); messages = [array]$finalMessages } | ConvertTo-Json -Depth 15
         Invoke-RestMethod -Uri "https://api.line.me/v2/bot/message/push" -Method Post -Headers @{ "Authorization" = "Bearer $token"; "Content-Type" = "application/json" } -Body $body
     }
 }
