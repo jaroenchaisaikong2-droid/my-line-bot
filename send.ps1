@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันมาตรฐานสากล: หัวตารางอังกฤษ + ผ่อนผันเวลา 5 นาที)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชันร่างสุดยอด: รองรับระบบหัวตาราง 2 ภาษา + ผ่อนผันเวลา 5 นาที)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -36,44 +36,52 @@ $matchedMessages = @()
 # วนลูปตรวจเช็คตารางงาน
 foreach ($task in $tasks) {
     
-    # [จุดแก้ไขสำคัญ] สั่งให้อ่านหัวตารางจากคีย์ภาษาอังกฤษ (sendAt) ตามหน้าตาราง Sheets ปัจจุบัน
-    if (-not $task.sendAt) { continue }
+    # [ปรับปรุงใหม่] ดึงค่าเวลาโดยรองรับทั้งคีย์ภาษาอังกฤษ และ ภาษาไทย
+    $rawSendAt = $null
+    if ($task.sendAt) { $rawSendAt = $task.sendAt }
+    elif ($task.'วันที่และเวลา') { $rawSendAt = $task.'วันที่และเวลา' }
+    
+    # ถ้าไม่มีข้อมูลเวลาเลยให้ข้ามแถวนี้ไป
+    if ([string]::IsNullOrEmpty($rawSendAt)) { continue }
     
     # แยกส่วน วันที่@เวลา ออกจากกัน
-    $timeParts = $task.sendAt -split "@"
+    $timeParts = $rawSendAt -split "@"
     if ($timeParts.Length -lt 2) { continue }
     
     $taskDate = $timeParts[0].Trim()
-    # รองรับทั้งคนที่พิมพ์เครื่องหมายจุด (.) หรือ ทวิภาค (:) โดยแปลงให้เป็นเครื่องหมาย : เสมอ
     $taskTimeStr = $timeParts[1].Trim().Replace(".", ":")
 
-    # ตรวจสอบว่าต้องเป็นวันที่ปัจจุบันก่อน
+    # ตรวจสอบว่าเป็นวันที่ปัจจุบัน
     if ($taskDate -eq $currentDateStr) {
         
-        # แปลงข้อความเวลาใน Sheet ให้กลายเป็นวัตถุเวลา DateTime เพื่อใช้วัดระยะห่าง
+        # แปลงข้อความเวลาในตารางให้กลายเป็นวัตถุเวลา DateTime
         if ([DateTime]::TryParseExact($taskTimeStr, "HH:mm", [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$taskTime)) {
             
-            # สร้างวัตถุเวลาปัจจุบันที่มีเฉพาะ ชั่วโมงและนาที เอาไว้เทียบกัน
+            # วัตถุเวลาปัจจุบัน (ชั่วโมงและนาที)
             $currentHourMin = [DateTime]::ParseExact($taiTime.ToString("HH:mm"), "HH:mm", [System.Globalization.CultureInfo]::InvariantCulture)
 
-            # คำนวณความต่างของเวลา (เวลาปัจจุบัน ลบด้วย เวลาในตาราง)
+            # คำนวณความต่างของเวลา (นาทีปัจจุบัน - นาทีในตาราง)
             $timeDiff = $currentHourMin - $taskTime
             $minutesDiff = $timeDiff.TotalMinutes
 
-            # ถ้ารันตรงเวลาเป๊ะ (0) หรือรันเลทไปไม่เกิน 5 นาที (1, 2, 3, 4, 5)
+            # กฎผ่อนผันเวลา: ตรงเวลาเป๊ะ (0) หรือเลทไปไม่เกิน 5 นาที (1 ถึง 5)
             if ($minutesDiff -ge 0 -and $minutesDiff -le 5) {
-                Write-Host "🎯 เจอคิวงานใกล้เคียง! เวลาในตาราง: $taskTimeStr (เลทไป $minutesDiff นาที) -> อนุญาตให้ส่งได้"
+                Write-Host "🎯 เจอคิวงานในตารางเวลา: $taskTimeStr (เลทไป $minutesDiff นาที) -> ผ่านเงื่อนไข"
                 
-                # [จุดแก้ไขสำคัญ] ดึงค่าจากหัวตารางภาษาอังกฤษ (type, param1, param2)
+                # ดึงข้อมูลข้อความ/ประเภท โดยรองรับทั้งระบบคีย์อังกฤษและไทย
+                $type = if ($task.type) { $task.type } else { $task.'ประเภทข้อความ' }
+                $param1 = if ($task.param1) { $task.param1 } else { $task.'ข้อความ / ลิงก์รูปภาพ' }
+                $param2 = if ($task.param2) { $task.param2 } else { $task.'รหัสสติกเกอร์ / พิกัด' }
+
                 $msgObject = @{}
-                if ($task.type -eq "text") {
-                    $msgObject = @{ type = "text"; text = $task.param1 }
+                if ($type -eq "text") {
+                    $msgObject = @{ type = "text"; text = $param1 }
                 }
-                elif ($task.type -eq "sticker") {
-                    $msgObject = @{ type = "sticker"; packageId = $task.param1; stickerId = $task.param2 }
+                elif ($type -eq "sticker") {
+                    $msgObject = @{ type = "sticker"; packageId = $param1; stickerId = $param2 }
                 }
-                elif ($task.type -eq "image") {
-                    $msgObject = @{ type = "image"; originalContentUrl = $task.param1; previewImageUrl = $task.param1 }
+                elif ($type -eq "image") {
+                    $msgObject = @{ type = "image"; originalContentUrl = $param1; previewImageUrl = $param1 }
                 }
                 
                 if ($msgObject.Count -gt 0) {
