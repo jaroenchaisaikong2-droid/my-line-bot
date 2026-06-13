@@ -1,0 +1,46 @@
+[
+  {
+    "sendAt": "15/06/2026@08:00",
+    "messages": [
+      {
+        "type": "text",
+        "text": "☀️ สวัสดีตอนเช้าครับ! รายงานระบบประจำวันที่ 15 มิ.ย. พร้อมแล้ว\nลิงก์เอกสาร: https://pea.co.th"
+      },
+      {
+        "type": "sticker",
+        "packageId": "446",
+        "stickerId": "1988"
+      }
+    ]
+  },
+  {
+    "sendAt": "15/06/2026@12:00",
+    "messages": [
+      {
+        "type": "text",
+        "text": "🍴 ได้เวลาพักเที่ยงแล้วครับ พิกัดร้านอาหารกลางวันวันนี้ กดดูแผนที่ด้านล่างได้เลย"
+      },
+      {
+        "type": "location",
+        "title": "ร้านอาหารใกล้สำนักงาน",
+        "address": "ถ.งามวงศ์วาน แขวงลาดยาว",
+        "latitude": 13.8441,
+        "longitude": 100.5543
+      }
+    ]
+  },
+  {
+    "sendAt": "15/06/2026@16:30",
+    "messages": [
+      {
+        "type": "image",
+        "originalContentUrl": "https://cdn.pixabay.com/photo/2023/04/13/17/49/sunrise-7923120_1280.jpg",
+        "previewImageUrl": "https://cdn.pixabay.com/photo/2023/04/13/17/49/sunrise-7923120_1280.jpg"
+      },
+      {
+        "type": "text",
+        "text": "📊 สรุปงานช่วงเย็นเรียบร้อยครับ เลิกงานเดินทางกลับบ้านปลอดภัยครับทุกท่าน"
+      }
+    ]
+  }
+]
