@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันแก้ไขจุดบกพร่องตัวแปร [ref] สำหรับระบบ Linux)
+# プロแกรมย่อย: send.ps1 (เวอร์ชันแก้ไขคำสั่งเงื่อนไข elseif ให้ถูกต้องตามหลัก PowerShell)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -37,8 +37,13 @@ $matchedMessages = @()
 foreach ($task in $tasks) {
     
     $rawSendAt = $null
-    if ($task.sendAt) { $rawSendAt = $task.sendAt }
-    elif ($task.'วันที่และเวลา') { $rawSendAt = $task.'วันที่และเวลา' }
+    if ($task.sendAt) { 
+        $rawSendAt = $task.sendAt 
+    }
+    # [แก้ไขจุดบกพร่อง] เปลี่ยนจาก elif เป็น elseif เพื่อให้ถูกต้องตามไวยากรณ์ PowerShell
+    elseif ($task.'วันที่และเวลา') { 
+        $rawSendAt = $task.'วันที่และเวลา' 
+    }
     
     if ([string]::IsNullOrEmpty($rawSendAt)) { continue }
     
@@ -50,7 +55,6 @@ foreach ($task in $tasks) {
 
     if ($taskDate -eq $currentDateStr) {
         
-        # [จุดแก้ไขสำคัญ] บังคับสร้างตัวแปรมารองรับค่าล่วงหน้า เพื่อป้องกันระบบ Linux ฟ้อง Error [ref]
         $taskTime = [DateTime]::MinValue
 
         if ([DateTime]::TryParseExact($taskTimeStr, "HH:mm", [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$taskTime)) {
@@ -63,9 +67,18 @@ foreach ($task in $tasks) {
             if ($minutesDiff -ge 0 -and $minutesDiff -le 5) {
                 Write-Host "🎯 เจอคิวงานในตารางเวลา: $taskTimeStr (เลทไป $minutesDiff นาที) -> ผ่านเงื่อนไข"
                 
-                $type = if ($task.type) { $task.type } else { $task.'ประเภทข้อความ' }
-                $param1 = if ($task.param1) { $task.param1 } else { $task.'ข้อความ / ลิงก์รูปภาพ' }
-                $param2 = if ($task.param2) { $task.param2 } else { $task.'รหัสสติกเกอร์ / พิกัด' }
+                # [แก้ไขจุดบกพร่อง] เปลี่ยนคำสั่งตรวจสอบประเภทและข้อมูลให้เป็น elseif ทั้งหมด
+                $type = $null
+                if ($task.type) { $type = $task.type }
+                elseif ($task.'ประเภทข้อความ') { $type = $task.'ประเภทข้อความ' }
+
+                $param1 = $null
+                if ($task.param1) { $param1 = $task.param1 }
+                elseif ($task.'ข้อความ / ลิงก์รูปภาพ') { $param1 = $task.'ข้อความ / ลิงก์รูปภาพ' }
+
+                $param2 = $null
+                if ($task.param2) { $param2 = $task.param2 }
+                elseif ($task.'รหัสสติกเกอร์ / พิกัด') { $param2 = $task.'รหัสสติกเกอร์ / พิกัด' }
 
                 $msgObject = @{}
                 if ($type -eq "text") {
