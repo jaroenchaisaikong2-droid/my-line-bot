@@ -1,5 +1,5 @@
 # ========================================================================
-# プロแกรมย่อย: send.ps1 (เวอร์ชันแก้ไขคำสั่งเงื่อนไข elseif ให้ถูกต้องตามหลัก PowerShell)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชันยืดหยุ่นสูงสุด: ผ่อนผันเวลาหน้า-หลังไม่เกิน 5 นาที)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -40,7 +40,6 @@ foreach ($task in $tasks) {
     if ($task.sendAt) { 
         $rawSendAt = $task.sendAt 
     }
-    # [แก้ไขจุดบกพร่อง] เปลี่ยนจาก elif เป็น elseif เพื่อให้ถูกต้องตามไวยากรณ์ PowerShell
     elseif ($task.'วันที่และเวลา') { 
         $rawSendAt = $task.'วันที่และเวลา' 
     }
@@ -59,15 +58,18 @@ foreach ($task in $tasks) {
 
         if ([DateTime]::TryParseExact($taskTimeStr, "HH:mm", [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$taskTime)) {
             
+            # สร้างวัตถุเวลาปัจจุบันที่มีเฉพาะชั่วโมงและนาทีเพื่อความแม่นยำในการคำนวณ
             $currentHourMin = [DateTime]::ParseExact($taiTime.ToString("HH:mm"), "HH:mm", [System.Globalization.CultureInfo]::InvariantCulture)
+            
+            # คำนวณความต่างของเวลา (เวลาปัจจุบัน ลบด้วย เวลาในตาราง)
             $timeDiff = $currentHourMin - $taskTime
             $minutesDiff = $timeDiff.TotalMinutes
 
-            # กฎผ่อนผันเวลาเลทได้ไม่เกิน 5 นาที
-            if ($minutesDiff -ge 0 -and $minutesDiff -le 5) {
-                Write-Host "🎯 เจอคิวงานในตารางเวลา: $taskTimeStr (เลทไป $minutesDiff นาที) -> ผ่านเงื่อนไข"
+            # [เงื่อนไขอัปเกรดใหม่] หน้า-หลังไม่เกิน 5 นาที (ค่าสัมบูรณ์ [Math]::Abs ต้องน้อยกว่าหรือเท่ากับ 5)
+            # เช่น ในตารางตั้ง 14:00 ถ้ารันตอน 13:55 (ต่าง -5) หรือรันตอน 14:05 (ต่าง +5) ก็ผ่านเงื่อนไขหมด!
+            if ([Math]::Abs($minutesDiff) -le 5) {
+                Write-Host "🎯 เจอคิวงานในตารางเวลา: $taskTimeStr (ความห่างของเวลา: $minutesDiff นาที) -> ผ่านเงื่อนไขหน้า-หลัง 5 นาที"
                 
-                # [แก้ไขจุดบกพร่อง] เปลี่ยนคำสั่งตรวจสอบประเภทและข้อมูลให้เป็น elseif ทั้งหมด
                 $type = $null
                 if ($task.type) { $type = $task.type }
                 elseif ($task.'ประเภทข้อความ') { $type = $task.'ประเภทข้อความ' }
@@ -119,5 +121,5 @@ if ($matchedMessages.Count -gt 0) {
         }
     }
 } else {
-    Write-Host "รอบนี้ไม่มีคิวงานใน Sheet ที่อยู่ในช่วงเวลาผ่อนผัน (เลทไม่เกิน 5 นาที)"
+    Write-Host "รอบนี้ไม่มีคิวงานใน Sheet ที่อยู่ในช่วงเวลาผ่อนผัน (หน้า-หลังไม่เกิน 5 นาที)"
 }
