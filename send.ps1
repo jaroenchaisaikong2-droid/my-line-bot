@@ -76,12 +76,28 @@ foreach ($key in $textMessages.Keys) { $finalMessages += @{ type = "text"; text 
 $finalMessages += $otherMessages
 
 # 3. [ของใหม่] นำ Carousel แต่ละกลุ่มเข้าคิว
+# ปรับโค้ดท่อนที่ 3 (ดึง Carousel เข้าคิวส่ง) ให้เพิ่มข้อความหัวข้อกลุ่ม
 foreach ($gKey in $carouselGroups.Keys) {
     $cols = $carouselGroups[$gKey]
-    # LINE จำกัด 1 กลุ่มมีได้ไม่เกิน 10 การ์ด
     if ($cols.Count -gt 10) { $cols = $cols[0..9] } 
     
-    $finalMessages += @{ type = "template"; altText = "คุณได้รับข้อความแบบการ์ด"; template = @{ type = "carousel"; columns = $cols } }
+    # ดึงชื่อกลุ่มจาก Param5 ออกมา (ตัดส่วนของเวลาออก)
+    $groupName = ($gKey -split "_")[1]
+    
+    # ถ้ามีการตั้งชื่อกลุ่ม (และไม่ใช่กลุ่มทั่วไป) ให้สร้างข้อความตัวหนังสือเป็นหัวข้อส่งนำไปก่อน
+    if ($groupName -ne "DefaultGroup") {
+        $finalMessages += @{ 
+            type = "text"; 
+            text = "📌 $groupName"  # นี่คือหัวข้อกลุ่มที่จะไปโชว์ใน LINE
+        }
+    }
+    
+    # ตามด้วยการ์ด Carousel กลุ่มนั้นๆ 
+    $finalMessages += @{ 
+        type = "template"; 
+        altText = "คุณได้รับคิวงานกลุ่ม $groupName"; 
+        template = @{ type = "carousel"; columns = $cols } 
+    }
 }
 
 # [ข้อควรระวัง] LINE API อนุญาตให้ส่งข้อความ (บอลลูน) ได้สูงสุด 5 ก้อนต่อ 1 การรัน
