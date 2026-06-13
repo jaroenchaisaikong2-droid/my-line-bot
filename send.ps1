@@ -31,19 +31,19 @@ if ($matchedMessages) {
         $id = $id.Trim()
         if (-not [string]::IsNullOrEmpty($id)) {
             
-            # โครงสร้างส่งหา LINE API
             $bodyObj = @{
                 to = $id
                 messages = $matchedMessages
             }
             
-            # แปลงเป็น JSON string แบบรองรับอักขระพิเศษภาษาไทย
-            $bodyJson = [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::Default.GetBytes((ConvertTo-Json $bodyObj -Depth 20 -Compress)))
+            # ปรับให้แปลงเป็น JSON แพลตฟอร์ม Linux อ่านอักขระไทยได้แม่นยำขึ้น
+            $bodyJson = ConvertTo-Json $bodyObj -Depth 20 -Compress
+            $utf8Body = [System.Text.Encoding]::UTF8.GetBytes($bodyJson)
 
             Invoke-RestMethod -Uri "https://api.line.me/v2/bot/message/push" `
                               -Method Post `
                               -Headers @{ "Authorization" = "Bearer $token"; "Content-Type" = "application/json; charset=utf-8" } `
-                              -Body $bodyJson
+                              -Body $utf8Body
                               
             Write-Host "ส่งข้อความคอมโบไปกลุ่ม $id สำเร็จแล้ว"
         }
