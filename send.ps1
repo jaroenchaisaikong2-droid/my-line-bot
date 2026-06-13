@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันยืดหยุ่นสูงสุด: ผ่อนผันเวลาหน้า-หลังไม่เกิน 5 นาที)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชันสมบูรณ์ที่สุด: หน้า-หลัง 5 นาที + แก้ elseif ครบ 100%)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -58,15 +58,12 @@ foreach ($task in $tasks) {
 
         if ([DateTime]::TryParseExact($taskTimeStr, "HH:mm", [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$taskTime)) {
             
-            # สร้างวัตถุเวลาปัจจุบันที่มีเฉพาะชั่วโมงและนาทีเพื่อความแม่นยำในการคำนวณ
             $currentHourMin = [DateTime]::ParseExact($taiTime.ToString("HH:mm"), "HH:mm", [System.Globalization.CultureInfo]::InvariantCulture)
             
-            # คำนวณความต่างของเวลา (เวลาปัจจุบัน ลบด้วย เวลาในตาราง)
             $timeDiff = $currentHourMin - $taskTime
             $minutesDiff = $timeDiff.TotalMinutes
 
-            # [เงื่อนไขอัปเกรดใหม่] หน้า-หลังไม่เกิน 5 นาที (ค่าสัมบูรณ์ [Math]::Abs ต้องน้อยกว่าหรือเท่ากับ 5)
-            # เช่น ในตารางตั้ง 14:00 ถ้ารันตอน 13:55 (ต่าง -5) หรือรันตอน 14:05 (ต่าง +5) ก็ผ่านเงื่อนไขหมด!
+            # เงื่อนไขหน้า-หลังไม่เกิน 5 นาที
             if ([Math]::Abs($minutesDiff) -le 5) {
                 Write-Host "🎯 เจอคิวงานในตารางเวลา: $taskTimeStr (ความห่างของเวลา: $minutesDiff นาที) -> ผ่านเงื่อนไขหน้า-หลัง 5 นาที"
                 
@@ -82,14 +79,15 @@ foreach ($task in $tasks) {
                 if ($task.param2) { $param2 = $task.param2 }
                 elseif ($task.'รหัสสติกเกอร์ / พิกัด') { $param2 = $task.'รหัสสติกเกอร์ / พิกัด' }
 
+                # [แก้ไขจุดที่เผลอพลาด] เปลี่ยนเป็น elseif ถูกต้องทั้งหมดแล้ว
                 $msgObject = @{}
                 if ($type -eq "text") {
                     $msgObject = @{ type = "text"; text = $param1 }
                 }
-                elif ($type -eq "sticker") {
+                elseif ($type -eq "sticker") {
                     $msgObject = @{ type = "sticker"; packageId = $param1; stickerId = $param2 }
                 }
-                elif ($type -eq "image") {
+                elseif ($type -eq "image") {
                     $msgObject = @{ type = "image"; originalContentUrl = $param1; previewImageUrl = $param1 }
                 }
                 
