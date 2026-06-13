@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Ultimate: ดูดปก YouTube, Heyzine, FlipHTML5 อัตโนมัติ)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Flex Message เปลี่ยนสีหัวข้อและปุ่มได้)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -44,59 +44,103 @@ foreach ($task in $tasks) {
                 $otherMessages += @{ type = "sticker"; packageId = $p1; stickerId = $p2 }
             }
             elseif ($type -eq "carousel") {
-                $col = @{
-                    title = if ([string]::IsNullOrWhiteSpace($p1)) { "-" } else { $p1 }
-                    text = if ([string]::IsNullOrWhiteSpace($p2)) { "-" } else { $p2 }
-                    actions = @(@{ type = "uri"; label = "ดูรายละเอียด"; uri = if ($p4 -match "^https?://") { $p4 } else { "https://line.me" } })
+                
+                $titleText = if ([string]::IsNullOrWhiteSpace($p1)) { "-" } else { $p1 }
+                $descText = if ([string]::IsNullOrWhiteSpace($p2)) { "-" } else { $p2 }
+                $uriLink = if ($p4 -match "^https?://") { $p4 } else { "https://line.me" }
+                
+                # --- [สร้างการ์ด Flex Message] ---
+                $bubble = @{
+                    type = "bubble"
+                    body = @{
+                        type = "box"
+                        layout = "vertical"
+                        contents = @(
+                            @{
+                                type = "text"
+                                text = $titleText
+                                weight = "bold"
+                                size = "xl"
+                                color = "#E53935" # 🎨 เปลี่ยนสีหัวข้อตรงนี้ (ปัจจุบัน: สีแดง)
+                                wrap = $true
+                            },
+                            @{
+                                type = "text"
+                                text = $descText
+                                size = "sm"
+                                color = "#666666" # 🎨 สีรายละเอียด (ปัจจุบัน: สีเทา)
+                                wrap = $true
+                                margin = "md"
+                            }
+                        )
+                    }
+                    footer = @{
+                        type = "box"
+                        layout = "vertical"
+                        spacing = "sm"
+                        contents = @(
+                            @{
+                                type = "button"
+                                style = "primary" # เปลี่ยนเป็น "link" ถ้าไม่อยากได้พื้นหลังสี
+                                color = "#1E88E5" # 🎨 เปลี่ยนสีปุ่มตรงนี้ (ปัจจุบัน: สีน้ำเงิน)
+                                action = @{
+                                    type = "uri"
+                                    label = "ดูรายละเอียด"
+                                    uri = $uriLink
+                                }
+                            }
+                        )
+                    }
                 }
                 
-                # --- [ระบบดูดรูปภาพอัจฉริยะ (Web Scraping)] ---
+                # --- ระบบดูดรูปภาพ ---
                 $finalThumbUrl = $null
                 
-                # 1. ถ้ามีรูประบุไว้ชัดเจนใน Param3 ให้ใช้รูปนั้น
-                if ($p3 -match "^https?://") {
-                    $finalThumbUrl = $p3
-                }
-                # 2. กรณี YouTube
+                if ($p3 -match "^https?://") { $finalThumbUrl = $p3 }
                 elseif ($p4 -match "youtu\.be/([^?]+)|youtube\.com/watch\?v=([^&]+)") {
                     $videoId = if ($matches[1]) { $matches[1] } else { $matches[2] }
                     $finalThumbUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
                 }
-                # 3. [เพิ่มใหม่!] กรณี Heyzine หรือ FlipHTML5
                 elseif ($p4 -match "heyzine\.com|fliphtml5\.com") {
                     try {
-                        # สั่งให้บอทวิ่งไปโหลดหน้าเว็บเพื่อหา Tag รูปภาพ (og:image)
                         $htmlContent = Invoke-RestMethod -Uri $p4 -Method Get -TimeoutSec 8
                         if ($htmlContent -match '(?i)<meta\s+(?:property|name)=["'']og:image["'']\s+content=["'']([^"'']+)["'']') {
                             $finalThumbUrl = $matches[1].Replace("&amp;", "&")
                         }
-                    } catch {
-                        Write-Warning "ไม่สามารถดึงภาพจากเว็บ $p4 ได้"
+                    } catch {}
+                }
+                
+                # ถ้าระบบหารูปภาพเจอ ให้นำไปประกอบเป็นส่วนบนสุดของการ์ด (Hero)
+                if ($null -ne $finalThumbUrl) {
+                    $bubble["hero"] = @{
+                        type = "image"
+                        url = $finalThumbUrl
+                        size = "full"
+                        aspectRatio = "20:13"
+                        aspectMode = "cover"
                     }
                 }
-                
-                # ถ้าระบบหาลิงก์รูปเจอ (ไม่ว่าจะจากวิธีไหน) ให้ใส่รูปในการ์ด
-                if ($null -ne $finalThumbUrl) {
-                    $col["thumbnailImageUrl"] = $finalThumbUrl
-                }
-                # ----------------------------------------------
+                # --------------------------------
 
                 $groupKey = "${rawSendAt}_${p5}"
-                
                 if (-not $carouselGroups.ContainsKey($groupKey)) {
                     $carouselGroups[$groupKey] = @()
                 }
-                $carouselGroups[$groupKey] += $col
+                $carouselGroups[$groupKey] += $bubble
             }
         }
-    } catch {
-        Write-Host "ข้ามแถวที่ข้อมูลไม่สมบูรณ์"
-    }
+    } catch {}
 }
 
 $finalMessages = @()
 
-foreach ($key in $textMessages.Keys) { $finalMessages += @{ type = "text"; text = $textMessages[$key] } }
+foreach ($key in $textMessages.Keys) { 
+    $cleanText = $textMessages[$key].Trim()
+    if (-not [string]::IsNullOrWhiteSpace($cleanText)) {
+        $finalMessages += @{ type = "text"; text = $cleanText } 
+    }
+}
+
 $finalMessages += $otherMessages
 
 foreach ($gKey in $carouselGroups.Keys) {
@@ -109,7 +153,15 @@ foreach ($gKey in $carouselGroups.Keys) {
         $finalMessages += @{ type = "text"; text = "📌 $groupName" }
     }
     
-    $finalMessages += @{ type = "template"; altText = "คุณได้รับคิวงานกลุ่ม $groupName"; template = @{ type = "carousel"; columns = $cols } }
+    # [จุดสำคัญ] เปลี่ยนการแพ็กข้อมูลจาก Template เป็น Flex Message
+    $finalMessages += @{ 
+        type = "flex"
+        altText = "คุณได้รับคิวงานกลุ่ม $groupName"
+        contents = @{ 
+            type = "carousel"
+            contents = $cols 
+        } 
+    }
 }
 
 if ($finalMessages.Count -gt 5) {
@@ -118,7 +170,7 @@ if ($finalMessages.Count -gt 5) {
 
 if ($finalMessages.Count -gt 0) {
     foreach ($id in $groupIds) {
-        $body = @{ to = $id.Trim(); messages = $finalMessages } | ConvertTo-Json -Depth 10
+        $body = @{ to = $id.Trim(); messages = $finalMessages } | ConvertTo-Json -Depth 15
         Invoke-RestMethod -Uri "https://api.line.me/v2/bot/message/push" -Method Post -Headers @{ "Authorization" = "Bearer $token"; "Content-Type" = "application/json" } -Body $body
     }
 }
