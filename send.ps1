@@ -60,20 +60,49 @@ foreach ($task in $tasks) {
                     $uriLink = if ($p4 -match "^https?://") { $p4 } else { "https://line.me" }
                     
                     # --- หารูปภาพปกอัตโนมัติ ---
-                    $finalThumbUrl = $null
-                    if ($p3 -match "^https?://") { $finalThumbUrl = $p3 }
-                    elseif ($p4 -match "youtu\.be/([^?]+)|youtube\.com/watch\?v=([^&]+)") {
-                        $videoId = if ($matches[1]) { $matches[1] } else { $matches[2] }
-                        $finalThumbUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
+                $finalThumbUrl = $null
+                
+                # 1. ถ้ามีรูปใน Param3 ให้ใช้รูปนั้นก่อนเสมอ
+                if ($p3 -match "^https?://") { $finalThumbUrl = $p3 }
+                
+                # 2. ถ้าเป็นลิงก์ YouTube ให้ดึงรูปปกมา
+                elseif ($p4 -match "youtu\.be/([^?]+)|youtube\.com/watch\?v=([^&]+)") {
+                    $videoId = if ($matches[1]) { $matches[1] } else { $matches[2] }
+                    $finalThumbUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
+                }
+                
+                # 3. 🌟 [อัปเกรดใหม่] ใช้ Microlink API ดึงรูปปก "ของแท้" จาก Facebook, IG, TikTok
+                elseif ($p4 -match "facebook\.com|fb\.watch|fb\.gg|tiktok\.com|instagram\.com|reel") {
+                    try {
+                        # แปลงลิงก์ให้เป็นรูปแบบที่ API อ่านได้
+                        $encodedUrl = [uri]::EscapeDataString($p4)
+                        $apiUrl = "https://api.microlink.io/?url=$encodedUrl"
+                        
+                        # ยิงคำสั่งให้ Microlink ไปดูดรูปมาให้ (รอไม่เกิน 10 วินาที)
+                        $apiResponse = Invoke-RestMethod -Uri $apiUrl -Method Get -TimeoutSec 10
+                        
+                        # ถ้าระบบคนกลางได้รูปมา ให้เอารูปแท้มาใช้
+                        if ($null -ne $apiResponse.data.image.url) {
+                            $finalThumbUrl = $apiResponse.data.image.url
+                        } else {
+                            # ถ้าคลิปนั้นโดนล็อคหรือเป็นส่วนตัว ให้ใช้รูปโลโก้แทน
+                            $finalThumbUrl = "https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=800&auto=format&fit=crop"
+                        }
+                    } catch {
+                        # กันเหนียว: ถ้า API ล่ม ให้โชว์รูปรวมๆ ไปก่อน
+                        $finalThumbUrl = "https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=800&auto=format&fit=crop"
                     }
-                    elseif ($p4 -match "heyzine\.com|fliphtml5\.com") {
-                        try {
-                            $htmlContent = Invoke-RestMethod -Uri $p4 -Method Get -TimeoutSec 8
-                            if ($htmlContent -match '(?i)<meta\s+(?:property|name)=["'']og:image["'']\s+content=["'']([^"'']+)["'']') {
-                                $finalThumbUrl = $matches[1].Replace("&amp;", "&")
-                            }
-                        } catch {}
-                    }
+                }
+                
+                # 4. ถ้าเป็น E-book ให้พยายามมุดไปดึงรูปมา
+                elseif ($p4 -match "heyzine\.com|fliphtml5\.com") {
+                    try {
+                        $htmlContent = Invoke-RestMethod -Uri $p4 -Method Get -TimeoutSec 8
+                        if ($htmlContent -match '(?i)<meta\s+(?:property|name)=["'']og:image["'']\s+content=["'']([^"'']+)["'']') {
+                            $finalThumbUrl = $matches[1].Replace("&amp;", "&")
+                        }
+                    } catch {}
+                }
 
                     # --- 1. สร้าง Hero Box (ส่วนรูปภาพ) ---
                     $heroBox = $null
