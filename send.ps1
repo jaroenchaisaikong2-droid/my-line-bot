@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันสมบูรณ์ที่สุด: หน้า-หลัง 5 นาที + แก้ elseif ครบ 100%)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชันสมบูรณ์: รองรับการขึ้นบรรทัดใหม่ด้วย \n)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -63,7 +63,6 @@ foreach ($task in $tasks) {
             $timeDiff = $currentHourMin - $taskTime
             $minutesDiff = $timeDiff.TotalMinutes
 
-            # เงื่อนไขหน้า-หลังไม่เกิน 5 นาที
             if ([Math]::Abs($minutesDiff) -le 5) {
                 Write-Host "🎯 เจอคิวงานในตารางเวลา: $taskTimeStr (ความห่างของเวลา: $minutesDiff นาที) -> ผ่านเงื่อนไขหน้า-หลัง 5 นาที"
                 
@@ -75,19 +74,23 @@ foreach ($task in $tasks) {
                 if ($task.param1) { $param1 = $task.param1 }
                 elseif ($task.'ข้อความ / ลิงก์รูปภาพ') { $param1 = $task.'ข้อความ / ลิงก์รูปภาพ' }
 
+                # [จุดที่เพิ่มเข้ามา] แปลงข้อความ \n ให้กลายเป็นการเคาะขึ้นบรรทัดใหม่ (Enter) จริงๆ ในระบบ
+                if ($null -ne $param1) {
+                    $param1 = $param1.Replace("\n", "`n")
+                }
+
                 $param2 = $null
                 if ($task.param2) { $param2 = $task.param2 }
                 elseif ($task.'รหัสสติกเกอร์ / พิกัด') { $param2 = $task.'รหัสสติกเกอร์ / พิกัด' }
 
-                # [แก้ไขจุดที่เผลอพลาด] เปลี่ยนเป็น elseif ถูกต้องทั้งหมดแล้ว
                 $msgObject = @{}
                 if ($type -eq "text") {
                     $msgObject = @{ type = "text"; text = $param1 }
                 }
-                elseif ($type -eq "sticker") {
+                elif ($type -eq "sticker") {
                     $msgObject = @{ type = "sticker"; packageId = $param1; stickerId = $param2 }
                 }
-                elseif ($type -eq "image") {
+                elif ($type -eq "image") {
                     $msgObject = @{ type = "image"; originalContentUrl = $param1; previewImageUrl = $param1 }
                 }
                 
