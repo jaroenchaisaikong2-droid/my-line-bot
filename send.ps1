@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Ultimate JSON + รองรับระบบส่ง "ทุกวัน")
+# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Ultimate: รองรับ ทุกวัน + Microlink API + URL Cleaner)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -24,18 +24,15 @@ foreach ($task in $tasks) {
         $timeParts = $rawSendAt -split "@"
         if ($timeParts.Count -lt 2) { continue } 
 
-        # 🌟 แยกระหว่าง "วันที่" และ "เวลา" ออกจากกัน
         $datePart = $timeParts[0].Trim()
         $timePart = $timeParts[1].Trim()
 
-        # 🌟 เช็คว่าบรรทัดนี้คือของวันนี้ หรือเป็นคิว "ทุกวัน"
         $isToday = ($datePart -eq $currentDateStr) -or ($datePart.ToLower() -eq "daily") -or ($datePart -eq "ทุกวัน")
 
         if ($isToday) {
             $taskTime = [DateTime]::ParseExact($timePart.Replace(".", ":"), "HH:mm", $null)
             $currentHourMin = [DateTime]::ParseExact($taiTime.ToString("HH:mm"), "HH:mm", $null)
             
-            # ถ้าเวลาตรงกับปัจจุบัน (บวกลบไม่เกิน 5 นาที) ให้เริ่มแพ็คข้อมูล
             if ([Math]::Abs(($currentHourMin - $taskTime).TotalMinutes) -le 5) {
                 
                 $type = if ($task.Type) { $task.Type } else { $task.'ประเภทข้อความ' }
@@ -57,52 +54,48 @@ foreach ($task in $tasks) {
                     
                     $titleText = if ([string]::IsNullOrWhiteSpace($p1)) { "-" } else { $p1 }
                     $descText = if ([string]::IsNullOrWhiteSpace($p2)) { "-" } else { $p2 }
-                    $uriLink = if ($p4 -match "^https?://") { $p4 } else { "https://line.me" }
+                    
+                    # 🌟 [ระบบใหม่] ทำความสะอาด URL ลบช่องว่างหรือ Enter ที่ติดมาออกให้หมด
+                    $cleanP4 = if ([string]::IsNullOrWhiteSpace($p4)) { "" } else { $p4.Trim() -replace '\s+', '' }
+                    $cleanP3 = if ([string]::IsNullOrWhiteSpace($p3)) { "" } else { $p3.Trim() -replace '\s+', '' }
+                    
+                    $uriLink = if ($cleanP4 -match "^https?://") { $cleanP4 } else { "https://line.me" }
                     
                     # --- หารูปภาพปกอัตโนมัติ ---
-                $finalThumbUrl = $null
-                
-                # 1. ถ้ามีรูปใน Param3 ให้ใช้รูปนั้นก่อนเสมอ
-                if ($p3 -match "^https?://") { $finalThumbUrl = $p3 }
-                
-                # 2. ถ้าเป็นลิงก์ YouTube ให้ดึงรูปปกมา
-                elseif ($p4 -match "youtu\.be/([^?]+)|youtube\.com/watch\?v=([^&]+)") {
-                    $videoId = if ($matches[1]) { $matches[1] } else { $matches[2] }
-                    $finalThumbUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
-                }
-                
-                # 3. 🌟 [อัปเกรดใหม่] ใช้ Microlink API ดึงรูปปก "ของแท้" จาก Facebook, IG, TikTok
-                elseif ($p4 -match "facebook\.com|fb\.watch|fb\.gg|tiktok\.com|instagram\.com|reel") {
-                    try {
-                        # แปลงลิงก์ให้เป็นรูปแบบที่ API อ่านได้
-                        $encodedUrl = [uri]::EscapeDataString($p4)
-                        $apiUrl = "https://api.microlink.io/?url=$encodedUrl"
-                        
-                        # ยิงคำสั่งให้ Microlink ไปดูดรูปมาให้ (รอไม่เกิน 10 วินาที)
-                        $apiResponse = Invoke-RestMethod -Uri $apiUrl -Method Get -TimeoutSec 10
-                        
-                        # ถ้าระบบคนกลางได้รูปมา ให้เอารูปแท้มาใช้
-                        if ($null -ne $apiResponse.data.image.url) {
-                            $finalThumbUrl = $apiResponse.data.image.url
-                        } else {
-                            # ถ้าคลิปนั้นโดนล็อคหรือเป็นส่วนตัว ให้ใช้รูปโลโก้แทน
+                    $finalThumbUrl = $null
+                    
+                    if ($cleanP3 -match "^https?://") { $finalThumbUrl = $cleanP3 }
+                    elseif ($cleanP4 -match "youtu\.be/([^?]+)|youtube\.com/watch\?v=([^&]+)") {
+                        $videoId = if ($matches[1]) { $matches[1] } else { $matches[2] }
+                        $finalThumbUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
+                    }
+                    elseif ($cleanP4 -match "facebook\.com|fb\.watch|fb\.gg|tiktok\.com|instagram\.com|reel") {
+                        try {
+                            $encodedUrl = [uri]::EscapeDataString($cleanP4)
+                            $apiUrl = "https://api.microlink.io/?url=$encodedUrl"
+                            $apiResponse = Invoke-RestMethod -Uri $apiUrl -Method Get -TimeoutSec 10
+                            
+                            if ($null -ne $apiResponse.data.image.url) {
+                                $finalThumbUrl = $apiResponse.data.image.url
+                            } else {
+                                $finalThumbUrl = "https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=800&auto=format&fit=crop"
+                            }
+                        } catch {
                             $finalThumbUrl = "https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=800&auto=format&fit=crop"
                         }
-                    } catch {
-                        # กันเหนียว: ถ้า API ล่ม ให้โชว์รูปรวมๆ ไปก่อน
-                        $finalThumbUrl = "https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=800&auto=format&fit=crop"
                     }
-                }
-                
-                # 4. ถ้าเป็น E-book ให้พยายามมุดไปดึงรูปมา
-                elseif ($p4 -match "heyzine\.com|fliphtml5\.com") {
-                    try {
-                        $htmlContent = Invoke-RestMethod -Uri $p4 -Method Get -TimeoutSec 8
-                        if ($htmlContent -match '(?i)<meta\s+(?:property|name)=["'']og:image["'']\s+content=["'']([^"'']+)["'']') {
-                            $finalThumbUrl = $matches[1].Replace("&amp;", "&")
-                        }
-                    } catch {}
-                }
+                    elseif ($cleanP4 -match "heyzine\.com|fliphtml5\.com") {
+                        try {
+                            $htmlContent = Invoke-RestMethod -Uri $cleanP4 -Method Get -TimeoutSec 8
+                            if ($htmlContent -match '(?i)<meta\s+(?:property|name)=["'']og:image["'']\s+content=["'']([^"'']+)["'']') {
+                                $finalThumbUrl = $matches[1].Replace("&amp;", "&")
+                            }
+                        } catch {}
+                    }
+                    
+                    if ($null -eq $finalThumbUrl -and $cleanP4 -match "^https?://") {
+                        $finalThumbUrl = "https://images.unsplash.com/photo-1495020632541-8fac34edc14c?q=80&w=800&auto=format&fit=crop"
+                    }
 
                     # --- 1. สร้าง Hero Box (ส่วนรูปภาพ) ---
                     $heroBox = $null
@@ -263,14 +256,14 @@ foreach ($gKey in $carouselGroups.Keys) {
 
 if ($finalMessages.Count -gt 5) { $finalMessages = $finalMessages[0..4] }
 
-# ส่งไปยัง LINE และ Trigger Web App
+# ส่งไปยัง LINE
 if ($finalMessages.Count -gt 0) {
     foreach ($id in $groupIds) {
         $body = @{ to = $id.Trim(); messages = [array]$finalMessages } | ConvertTo-Json -Depth 15
         Invoke-RestMethod -Uri "https://api.line.me/v2/bot/message/push" -Method Post -Headers @{ "Authorization" = "Bearer $token"; "Content-Type" = "application/json" } -Body $body
     }
     
-    # สั่งให้ Google Sheets ย้ายข้อมูลหลังจากส่ง LINE เสร็จ (ต้องคงลิงก์เดิมของคุณเอาไว้นะครับ)
+    # 🌟 อย่าลืมวางลิงก์ Web App ของคุณตรงนี้ เพื่อย้ายงานลง Archive ครับ
     Write-Host "กำลังส่งสัญญาณบอกให้ Google Sheets ทำความสะอาดตาราง..."
     Invoke-RestMethod -Uri "https://script.google.com/macros/s/AKfycbwrT3rG_XWM97-tRbvfAQYn4vky61MKNPkbw3OHXOkBl45978KiEIUBgkmKi6rMFadHlg/exec" -Method Get
 }
