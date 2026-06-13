@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชันแยกกลุ่ม Carousel อิสระด้วย Param5)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชันดึงหน้าปก YouTube อัตโนมัติ)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -13,7 +13,7 @@ $csvRaw = Invoke-RestMethod -Uri $sheetUrl -Method Get -TimeoutSec 15
 $tasks = ConvertFrom-Csv -InputObject $csvRaw | Where-Object { $_.SendAt -or $_.'วันที่และเวลา' }
 
 $textMessages = @{} 
-$carouselGroups = @{} # [เปลี่ยนใหม่] เก็บ Carousel แยกเป็นกลุ่มๆ
+$carouselGroups = @{} 
 $otherMessages = @() 
 
 foreach ($task in $tasks) {
@@ -34,8 +34,6 @@ foreach ($task in $tasks) {
             $p2 = if ($task.Param2) { $task.Param2 } else { $task.'รหัสสติกเกอร์ / พิกัด' }
             $p3 = if ($task.Param3) { $task.Param3 } else { $task.'ลิงก์รูปภาพ' }
             $p4 = if ($task.Param4) { $task.Param4 } else { $task.'ลิงก์ URL' }
-            
-            # [ของใหม่] ตัวแปรกลุ่ม ถ้าไม่ได้กรอก จะเหมาว่าเป็น "DefaultGroup"
             $p5 = if ($task.Param5) { $task.Param5 } else { "DefaultGroup" }
 
             if ($type -eq "text") {
@@ -51,9 +49,28 @@ foreach ($task in $tasks) {
                     text = if ([string]::IsNullOrWhiteSpace($p2)) { "-" } else { $p2 }
                     actions = @(@{ type = "uri"; label = "ดูรายละเอียด"; uri = if ($p4 -match "^https?://") { $p4 } else { "https://line.me" } })
                 }
-                if ($p3 -match "^https?://") { $col["thumbnailImageUrl"] = $p3 }
                 
-                # [ของใหม่] นำเวลาและชื่อกลุ่มมาต่อกันเป็นกุญแจ (เช่น "14:00_ชุดที่1") เพื่อแยกหมวดหมู่
+                # --- [ระบบจัดการรูปภาพอัจฉริยะ] ---
+                $finalThumbUrl = $null
+                
+                # 1. ถ้ามีรูปภาพตรงๆ อยู่ใน Param3 ให้ใช้รูปนั้นเป็นอันดับแรก
+                if ($p3 -match "^https?://") {
+                    $finalThumbUrl = $p3
+                }
+                # 2. ถ้าช่องรูปว่างเปล่า ให้ตรวจสอบว่า URL เป็น YouTube หรือไม่
+                elseif ($p4 -match "youtu\.be/([^?]+)") {
+                    $finalThumbUrl = "https://img.youtube.com/vi/$($matches[1])/hqdefault.jpg"
+                }
+                elseif ($p4 -match "youtube\.com/watch\?v=([^&]+)") {
+                    $finalThumbUrl = "https://img.youtube.com/vi/$($matches[1])/hqdefault.jpg"
+                }
+                
+                # ถ้าระบบได้ลิงก์รูปภาพมา (ไม่ว่าจาก Param3 หรือจากสูตร YouTube) ให้ยัดลงในการ์ด
+                if ($null -ne $finalThumbUrl) {
+                    $col["thumbnailImageUrl"] = $finalThumbUrl
+                }
+                # --------------------------------
+
                 $groupKey = "${rawSendAt}_${p5}"
                 
                 if (-not $carouselGroups.ContainsKey($groupKey)) {
@@ -69,40 +86,24 @@ foreach ($task in $tasks) {
 
 $finalMessages = @()
 
-# 1. นำข้อความ Text เข้าคิว
 foreach ($key in $textMessages.Keys) { $finalMessages += @{ type = "text"; text = $textMessages[$key] } }
-
-# 2. นำสติกเกอร์เข้าคิว
 $finalMessages += $otherMessages
 
-# 3. [ของใหม่] นำ Carousel แต่ละกลุ่มเข้าคิว
-# ปรับโค้ดท่อนที่ 3 (ดึง Carousel เข้าคิวส่ง) ให้เพิ่มข้อความหัวข้อกลุ่ม
 foreach ($gKey in $carouselGroups.Keys) {
     $cols = $carouselGroups[$gKey]
     if ($cols.Count -gt 10) { $cols = $cols[0..9] } 
     
-    # ดึงชื่อกลุ่มจาก Param5 ออกมา (ตัดส่วนของเวลาออก)
     $groupName = ($gKey -split "_")[1]
     
-    # ถ้ามีการตั้งชื่อกลุ่ม (และไม่ใช่กลุ่มทั่วไป) ให้สร้างข้อความตัวหนังสือเป็นหัวข้อส่งนำไปก่อน
     if ($groupName -ne "DefaultGroup") {
-        $finalMessages += @{ 
-            type = "text"; 
-            text = "📌 $groupName"  # นี่คือหัวข้อกลุ่มที่จะไปโชว์ใน LINE
-        }
+        $finalMessages += @{ type = "text"; text = "📌 $groupName" }
     }
     
-    # ตามด้วยการ์ด Carousel กลุ่มนั้นๆ 
-    $finalMessages += @{ 
-        type = "template"; 
-        altText = "คุณได้รับคิวงานกลุ่ม $groupName"; 
-        template = @{ type = "carousel"; columns = $cols } 
-    }
+    $finalMessages += @{ type = "template"; altText = "คุณได้รับคิวงานกลุ่ม $groupName"; template = @{ type = "carousel"; columns = $cols } }
 }
 
-# [ข้อควรระวัง] LINE API อนุญาตให้ส่งข้อความ (บอลลูน) ได้สูงสุด 5 ก้อนต่อ 1 การรัน
 if ($finalMessages.Count -gt 5) {
-    Write-Warning "มีข้อความเกิน 5 ก้อน ระบบจะส่งแค่ 5 ก้อนแรกตามข้อจำกัดของ LINE API"
+    Write-Warning "มีข้อความเกิน 5 ก้อน ระบบจะส่งแค่ 5 ก้อนแรก"
     $finalMessages = $finalMessages[0..4]
 }
 
