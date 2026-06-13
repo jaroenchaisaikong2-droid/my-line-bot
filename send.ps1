@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Strict JSON ป้องกันบั๊ก PowerShell 100%)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Strict JSON แก้ไข offsetStart ผ่าน 100%)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -87,7 +87,7 @@ foreach ($task in $tasks) {
                             cornerRadius = "md"
                             paddingAll = "sm"
                             offsetTop = "10px"
-                            offsetLeft = "10px"
+                            offsetStart = "10px"  # <--- แก้ไขจาก offsetLeft เป็น offsetStart แล้วตรงนี้ครับ!
                             contents = @(
                                 [ordered]@{
                                     type = "text"
