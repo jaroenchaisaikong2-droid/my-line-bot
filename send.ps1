@@ -1,5 +1,5 @@
 # ========================================================================
-# โปรแกรมย่อย: send.ps1 (เวอร์ชัน Flex Message เปลี่ยนสีหัวข้อและปุ่มได้)
+# โปรแกรมย่อย: send.ps1 (เวอร์ชันมหาเทพ: ดูดปกอัตโนมัติ + ป้ายกำกับลอยทับรูป)
 # ========================================================================
 
 $token = $env:LINE_TOKEN
@@ -35,6 +35,7 @@ foreach ($task in $tasks) {
             $p3 = if ($task.Param3) { $task.Param3 } else { $task.'ลิงก์รูปภาพ' }
             $p4 = if ($task.Param4) { $task.Param4 } else { $task.'ลิงก์ URL' }
             $p5 = if ($task.Param5) { $task.Param5 } else { "DefaultGroup" }
+            $p6 = if ($task.Param6) { $task.Param6 } else { "" } # [เพิ่มใหม่] รับค่าป้ายกำกับ
 
             if ($type -eq "text") {
                 if ($textMessages.ContainsKey($rawSendAt)) { $textMessages[$rawSendAt] += "`n" + $p1 }
@@ -49,7 +50,7 @@ foreach ($task in $tasks) {
                 $descText = if ([string]::IsNullOrWhiteSpace($p2)) { "-" } else { $p2 }
                 $uriLink = if ($p4 -match "^https?://") { $p4 } else { "https://line.me" }
                 
-                # --- [สร้างการ์ด Flex Message] ---
+                # โครงสร้างตัวการ์ดพื้นฐาน
                 $bubble = @{
                     type = "bubble"
                     body = @{
@@ -61,14 +62,15 @@ foreach ($task in $tasks) {
                                 text = $titleText
                                 weight = "bold"
                                 size = "xl"
-                                color = "#E53935" # 🎨 เปลี่ยนสีหัวข้อตรงนี้ (ปัจจุบัน: สีแดง)
+                                color = "#E53935"
                                 wrap = $true
                             },
                             @{
                                 type = "text"
                                 text = $descText
+                                weight = "bold"
                                 size = "sm"
-                                color = "#666666" # 🎨 สีรายละเอียด (ปัจจุบัน: สีเทา)
+                                color = "#666666"
                                 wrap = $true
                                 margin = "md"
                             }
@@ -81,8 +83,8 @@ foreach ($task in $tasks) {
                         contents = @(
                             @{
                                 type = "button"
-                                style = "primary" # เปลี่ยนเป็น "link" ถ้าไม่อยากได้พื้นหลังสี
-                                color = "#1E88E5" # 🎨 เปลี่ยนสีปุ่มตรงนี้ (ปัจจุบัน: สีน้ำเงิน)
+                                style = "primary"
+                                color = "#1E88E5"
                                 action = @{
                                     type = "uri"
                                     label = "ดูรายละเอียด"
@@ -93,9 +95,8 @@ foreach ($task in $tasks) {
                     }
                 }
                 
-                # --- ระบบดูดรูปภาพ ---
+                # --- ระบบดูดรูปภาพอัตโนมัติ ---
                 $finalThumbUrl = $null
-                
                 if ($p3 -match "^https?://") { $finalThumbUrl = $p3 }
                 elseif ($p4 -match "youtu\.be/([^?]+)|youtube\.com/watch\?v=([^&]+)") {
                     $videoId = if ($matches[1]) { $matches[1] } else { $matches[2] }
@@ -110,17 +111,48 @@ foreach ($task in $tasks) {
                     } catch {}
                 }
                 
-                # ถ้าระบบหารูปภาพเจอ ให้นำไปประกอบเป็นส่วนบนสุดของการ์ด (Hero)
+                # [อัปเกรดจุดสร้างป้ายกำกับลอยทับรูป]
                 if ($null -ne $finalThumbUrl) {
-                    $bubble["hero"] = @{
-                        type = "image"
-                        url = $finalThumbUrl
-                        size = "full"
-                        aspectRatio = "20:13"
-                        aspectMode = "cover"
+                    # สร้างกล่องภาพขนาดเต็ม
+                    $heroBox = @{
+                        type = "box"
+                        layout = "vertical"
+                        contents = @(
+                            @{
+                                type = "image"
+                                url = $finalThumbUrl
+                                size = "full"
+                                aspectRatio = "20:13"
+                                aspectMode = "cover"
+                            }
+                        )
                     }
+                    
+                    # ถ้าในสเปรดชีตมีการพิมพ์ป้ายกำกับ (Param6) ให้เสกป้ายลอยขึ้นมาทับรูปภาพ
+                    if (-not [string]::IsNullOrWhiteSpace($p6)) {
+                        $heroBox["contents"] += @{
+                            type = "box"
+                            layout = "vertical"
+                            position = "absolute"
+                            backgroundColor = "#FF9800" # 🎨 สีพื้นหลังป้ายกำกับ (ปัจจุบัน: สีส้มสดใส)
+                            cornerRadius = "md"
+                            paddingAll = "sm"
+                            offsetTop = "10px"      # ระยะห่างจากขอบบนรูป
+                            offsetLeft = "10px"     # ระยะห่างจากขอบซ้ายรูป
+                            contents = @(
+                                @{
+                                    type = "text"
+                                    text = $p6
+                                    color = "#FFFFFF" # 🎨 สีตัวอักษรบนป้าย (สีขาว)
+                                    size = "xs"
+                                    weight = "bold"
+                                }
+                            )
+                        }
+                    }
+                    
+                    $bubble["hero"] = $heroBox
                 }
-                # --------------------------------
 
                 $groupKey = "${rawSendAt}_${p5}"
                 if (-not $carouselGroups.ContainsKey($groupKey)) {
@@ -153,10 +185,9 @@ foreach ($gKey in $carouselGroups.Keys) {
         $finalMessages += @{ type = "text"; text = "📌 $groupName" }
     }
     
-    # [จุดสำคัญ] เปลี่ยนการแพ็กข้อมูลจาก Template เป็น Flex Message
     $finalMessages += @{ 
         type = "flex"
-        altText = "คุณได้รับคิวงานกลุ่ม $groupName"
+        altText = "คุณได้รับข้อความกลุ่ม $groupName"
         contents = @{ 
             type = "carousel"
             contents = $cols 
@@ -164,9 +195,7 @@ foreach ($gKey in $carouselGroups.Keys) {
     }
 }
 
-if ($finalMessages.Count -gt 5) {
-    $finalMessages = $finalMessages[0..4]
-}
+if ($finalMessages.Count -gt 5) { $finalMessages = $finalMessages[0..4] }
 
 if ($finalMessages.Count -gt 0) {
     foreach ($id in $groupIds) {
