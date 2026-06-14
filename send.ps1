@@ -33,7 +33,7 @@ foreach ($task in $tasks) {
             $taskTime = [DateTime]::ParseExact($timePart.Replace(".", ":"), "HH:mm", $null)
             $currentHourMin = [DateTime]::ParseExact($taiTime.ToString("HH:mm"), "HH:mm", $null)
             
-            if ([Math]::Abs(($currentHourMin - $taskTime).TotalMinutes) -le 5) {
+            if ([Math]::Abs(($currentHourMin - $taskTime).TotalMinutes) -le 20) {
                 
                 $type = if ($task.Type) { $task.Type } else { $task.'ประเภทข้อความ' }
                 $p1 = if ($task.Param1) { $task.Param1 } else { $task.'ข้อความ / ลิงก์รูปภาพ' }
